@@ -204,9 +204,10 @@ function App() {
             <p className="subheading">Choose 3–5 independent sharekeepers. We’ll guide you through their contact details, then generate a separate pad for each.</p>
             <fieldset className="count-fieldset"><legend>Number of sharekeepers</legend><div className="count-options">
               {KEEPER_COUNTS.map((n) => <button key={n} type="button" aria-pressed={count === n} className={count === n ? "count-option selected" : "count-option"} onClick={() => setCount(n)} data-testid={`count-${n}`}>
-                <span className="count-value">{n}</span><span>sharekeepers</span><span className="count-detail">3-of-{n} sheet</span>{count === n && <CheckCircle2 size={18} aria-hidden="true" />}
+                <span className="count-value">{n}</span><span>sharekeepers</span><span className="count-detail">One pad per keeper</span>{count === n && <CheckCircle2 size={18} aria-hidden="true" />}
               </button>)}
             </div></fieldset>
+            <p className="technical-note">The worksheet uses a fixed recovery threshold of 3, regardless of the keeper count. It prepares pad and contact fields, not the shares themselves.</p>
             <div className="profile-row"><span><strong>{THRESHOLD}-of-{count}</strong> sheet layout</span><span><strong>{PAD_LENGTH} letters</strong> per pad</span><span><strong>A2</strong> printable PDF</span></div>
             <div className="plain-note"><LockKeyhole size={19} aria-hidden="true" /><div><h3>Keep wallet secrets out of this tool.</h3><p>We never ask for a seed phrase, share, or wallet passphrase. This prototype creates pads and a contact sheet, not SLIP-39 shares.</p></div></div>
             <div className="actions"><button className="primary-button" onClick={() => go(1)} disabled={!cryptoReady} data-testid="button-start">Continue to contacts <ArrowRight size={17} aria-hidden="true" /></button></div>
@@ -276,7 +277,7 @@ function App() {
       <aside className="sheet-aside" aria-label="Your sheet profile">
         <p className="eyebrow">The document</p>
         <div className="paper-preview" aria-hidden="true">
-          <div className="paper-title">SHAREKEEPER</div><div className="paper-subtitle">SLIP-39 RECOVERY SHEET · 3 OF {count}</div><div className="paper-instructions" />
+          <div className="paper-title">SHAREKEEPER</div><div className="paper-subtitle">PRIVATE PAD WORKSHEET · 3 OF {count}</div><div className="paper-instructions" />
           {Array.from({ length: 5 }, (_, i) => <div className={`paper-share ${i >= count ? "unused" : ""}`} key={i}><div className="paper-share-header"><strong>SHARE {String(i + 1).padStart(2, "0")}</strong><span>{i >= count ? "NOT USED" : ""}</span></div><div className="paper-share-content"><div className="paper-contact">{i < count && keepers[i].name ? keepers[i].name : <><i /><i /><i /></>}</div><div className="paper-grid">{Array.from({ length: 20 }, (_, j) => <i key={j} />)}</div></div><div className="paper-hash" /></div>)}
           <div className="paper-wallets"><span>ACCOUNTS / WALLET PASSPHRASES</span><i /><i /><i /></div>
         </div>
