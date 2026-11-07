@@ -1,0 +1,3 @@
+# Preserve supplied image and PDF assets byte-for-byte without text conversion.
+*.png binary
+*.pdf binary

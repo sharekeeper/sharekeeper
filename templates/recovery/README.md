@@ -10,6 +10,10 @@
 
 Keep this original intact. Add reviewed revisions and editable source files separately when available.
 
+## Cross-artifact consistency
+
+The [protocol-flow sketch notes](../../docs/protocol/README.md#cross-artifact-decisions-to-reconcile) track differences in pad length and release timing between this sheet and the flow sketch. Neither original has been silently reconciled or promoted to a normative standard.
+
 ## Secret-handling boundary
 
 Only blank templates and explicitly labeled synthetic test fixtures belong in this repository. Never commit completed recovery sheets, live shares or seed phrases, secret pads, wallet passphrases, or other live recovery data.
