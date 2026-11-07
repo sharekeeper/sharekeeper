@@ -9,7 +9,7 @@ The public website includes Home, Standard, Learn, Tools, Providers, and a provi
 - **Public portal:** `tools/recovery-sheet/dist/index.html`, built from `tools/recovery-sheet/site/`.
 - **Private recovery workspace:** `tools/recovery-sheet/dist/recovery.html`.
 - **Offline recovery workspace:** `tools/recovery-sheet/dist/sharekeeper-offline.html`, identical to the pristine recovery application.
-- **Blank download:** The original latest sample recovery sheet, not a completed worksheet.
+- **Blank download:** The latest original sample recovery sheet, including its revised keeper layout and seven blank account/wallet rows, not a completed worksheet.
 - **Provider directory:** Only approved public listing fields belong in the source-controlled directory. An empty directory must remain honestly empty until real listings are reviewed and approved.
 
 Provider applications and private reviewer contacts must never be committed to this public repository. The application interface must disclose an unconfigured intake connection rather than pretend a draft was submitted; actual submission is enabled only after the private intake destination is connected and verified.

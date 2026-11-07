@@ -1,8 +1,10 @@
 import { readFile, writeFile, mkdir, copyFile, rm } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { inlineBrowserIcons } from "./inline-branding.mjs";
 
 const dist = new URL("../dist/", import.meta.url);
 let html = await readFile(new URL("site-build/index.html", dist), "utf8");
+html = await inlineBrowserIcons(html);
 const notices = await readFile(new URL("../assets/third-party-notices.txt", import.meta.url), "utf8");
 const escaped = notices.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 html = html.replace("</body>", `<template id="third-party-notices">${escaped}</template></body>`);

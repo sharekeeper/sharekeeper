@@ -10,3 +10,16 @@ with Image.open(source) as image:
     image.resize(size, Image.Resampling.LANCZOS).save(
         directory / "logo-with-domain.webp", "WEBP", lossless=True, method=6
     )
+
+# Reuse the supplied standalone artwork, without redrawing or recoloring it.
+# Both documents inline these icons at build time, including the offline copy.
+mark_source = directory.parents[2] / "assets" / "brand" / "logo-prototype.png"
+with Image.open(mark_source) as image:
+    mark = image.convert("RGBA")
+    mark.resize((32, 32), Image.Resampling.LANCZOS).save(
+        directory / "favicon-32.png", "PNG", optimize=True
+    )
+    mark.save(
+        directory / "favicon.ico", "ICO",
+        sizes=[(16, 16), (32, 32), (48, 48)]
+    )

@@ -37,9 +37,22 @@ Inspect setup, contact entry, entropy collection, review, and generated-output s
 - **Incomplete / edited contacts:** Jump ahead, return to review, remove contact details, then try generation. Validation must prevent incomplete output without losing the other contacts.
 - **Weak environment:** Browser without SubtleCrypto must not silently fall back. Synthetic or repeated gesture samples must never be advertised as measured security strength.
 
+## Latest compact-sheet regeneration
+
+Verified on 2026-11-07 against the supplied source SHA-256 `fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6`. The source PDF is preserved byte-for-byte, including its incomplete step 6; these tests are not an endorsement of the prototype recovery instructions.
+
+- **Build and source fidelity:** All 51 unit tests pass, including the new thumbnail-provenance and favicon tests. The production payload contains only the portal, separate recovery tool, identical offline copy, and exact source sample. Independent final-build review confirmed that the embedded derivative matches the final frozen source assets, not an earlier layout.
+- **Compact PDF layout:** Actual browser downloads for 3, 4, and 5 keepers pass qpdf checks. Independent actual-glyph measurements cover every A–Z pad letter and supported two-line contacts; generated ink stays out of the ciphertext-prefix boxes, CRC32 cells, and all seven wallet rows. Contact fitting retains its eight-point minimum and explicit overflow failures.
+- **Browser flows:** All six portal routes were exercised at desktop and 375 px, with no horizontal overflow or page errors. Threshold toggles, six FAQ disclosures, standard navigation, directory filters/reset, and mobile menu/Escape were checked. Local draft validation, overlength retention, review, actual JSON download marked not submitted, edit preservation, and clear cancel/confirm all pass.
+- **Recovery and offline:** Mouse collection/reset generated a three-keeper sheet, and keyboard timing generated a five-keeper sheet. Repeat PDF downloads were identical; reveal/hide and clear cancel/confirm passed. The pristine downloaded HTML generated a four-keeper sheet with networking disabled and zero HTTP requests. Missing Web Crypto and unsupported PDF characters failed closed; overlong contact input remained intact and was rejected.
+- **Brand icons:** The original standalone logo is resized without redrawing or recoloring. PNG and multi-resolution ICO bytes are embedded in all three HTML documents; the browser decoded the 32px PNG in both the portal and offline file. No external favicon request or image-CSP relaxation is required. A favicon does not replace browser-controlled address-bar security indicators.
+- **Provider intake:** The native Google Form's explicitly loaded embed rendered all 15 text fields. No actual submission was made, so durable response readback remains unverified; manual completeness, consent, and approval review remain required.
+
+The earlier touch-emulation limitation below is unchanged. Current checks do not certify physical-phone behavior or constitute a formal cryptographic audit.
+
 ## Full-site regeneration verification
 
-Verified in Chromium on 2026-11-07 after the updated CRC32 sample and removal of the protocol-diagram PDF. This is implementation testing and targeted code review, not a formal security or accessibility audit.
+The following baseline was verified in Chromium on 2026-11-07 against the earlier CRC32 sample (`e2305bc78fee87e357f15bf67462c0cba9a98f2bec28e64d55b68933857ee270`) after removal of the protocol-diagram PDF. It is not a verification claim for a later template revision. This is implementation testing and targeted code review, not a formal security or accessibility audit.
 
 - **Build and unit tests:** All 46 tests pass. The combined build produces the portal, a separate recovery document, its byte-identical offline copy, and only the latest blank recovery-sheet PDF.
 - **Portal routes:** All six routes render at desktop and 375 px without horizontal overflow. Header navigation, browser Back, table-of-contents links, six FAQ toggles, the 3-of-5 conceptual counter, directory search/service/reset controls, and the not-found return path were exercised.

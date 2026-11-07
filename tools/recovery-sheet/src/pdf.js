@@ -20,6 +20,7 @@ const ROWS = [
 ];
 const CONTACT_WIDTH = 190;
 const CONTACT_ROW_HEIGHT = 17;
+const KEEPER_STRIDE = 200;
 export const PDF_CONTACT_FRAME = Object.freeze({
   width: CONTACT_WIDTH,
   height: CONTACT_ROW_HEIGHT,
@@ -216,13 +217,13 @@ function text(page, font, value, x, y, size, color = INK) {
 }
 
 function drawContacts(page, font, rows, offset) {
-  // Keep seven 17pt derivative rows, including a two-line Email/web row. The
-  // revised source's contact rules are 16pt apart; this white area removes them.
-  // Our last rule is y1215.28, safely above the moved prefix labels at y1204.78
-  // and prefix boxes ending at y1200.78. No source label survives underneath.
-  page.drawRectangle({ x: 41, y: 1214.78 - offset, width: 297, height: 121, color: WHITE });
+  // Keep seven descender-safe 17pt derivative rows instead of the source's
+  // 14.5pt rows. The first row starts 0.5pt below the card header. Prefix-number
+  // headings are lowered 3.25pt in the derivative background to clear our final
+  // rule at y1221.28; their blank entry boxes still end at source y1212.78.
+  page.drawRectangle({ x: 41, y: 1220.78 - offset, width: 297, height: 119.5, color: WHITE });
   rows.forEach((row, index) => {
-    const top = 1334.28 - offset - index * CONTACT_ROW_HEIGHT;
+    const top = 1340.28 - offset - index * CONTACT_ROW_HEIGHT;
     text(page, font, row.label, 43, top - 10.7, 8.4, MUTED);
     const fit = row.fit;
     fit.lines.forEach((line, lineIndex) => {
@@ -246,7 +247,7 @@ function drawPad(page, font, pad, offset) {
     const column = group % 10;
     const row = Math.floor(group / 10);
     const cellX = 371 + column * 78.8551 + (index % 4) * 16;
-    const cellY = 1290.78 - row * 50 - offset;
+    const cellY = 1294.78 - row * 46 - offset;
     const size = 17;
     const width = font.widthOfTextAtSize(pad[index], size);
     text(page, font, pad[index], cellX + (16 - width) / 2, cellY + 6.6, size);
@@ -288,15 +289,15 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary }) {
   document.setKeywords(["Sharekeeper", "private K pads", "prototype", "80 letters", "20 groups of 4"]);
 
   text(page, font, `3 OF ${keepers.length}  |  PRIVATE K PADS  |  80 LETTERS / 20 x 4`, 698, 1628.78, 11.1, TEAL);
-  text(page, font, "4. Follow the agreed release policy; record the notice and release time.", 43, 1494.78, 11.1);
+  text(page, font, "4. Follow the agreed release policy; record the notice and release time.", 43, 1494.78, 13.4362);
   text(page, font, "PRIVATE K PADS: 80 A-Z letters per keeper, arranged as 20 groups x 4. Keep separate from ciphertext.", 43, 1466.78, 11.4, TEAL);
   text(page, font, "Prototype, not audited. No ciphertext or mnemonic generated. No fixed release delay has been verified.", 43, 1449.78, 10.6, MUTED);
 
   for (let index = 0; index < 5; index += 1) {
-    const offset = index * 212;
+    const offset = index * KEEPER_STRIDE;
     if (index >= keepers.length) {
       // No fake contacts, pad letters, authentication values, or checksums.
-      page.drawRectangle({ x: 31, y: 1166.78 - offset, width: 1128.5, height: 201, color: WHITE });
+      page.drawRectangle({ x: 31, y: 1178.78 - offset, width: 1128.5, height: 189, color: WHITE });
       text(page, font, `SLOT ${String(index + 1).padStart(2, "0")}  |  NOT USED`, 43, 1349.78 - offset, 14, MUTED);
       text(page, font, `This worksheet uses 3 of ${keepers.length} keepers. No pad or contact is assigned to this slot.`, 371, 1280.78 - offset, 12, MUTED);
       continue;

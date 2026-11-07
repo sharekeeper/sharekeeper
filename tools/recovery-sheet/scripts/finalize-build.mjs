@@ -1,8 +1,10 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { inlineBrowserIcons, removeEmittedFaviconFiles } from "./inline-branding.mjs";
 
 const path = new URL("../dist/index.html", import.meta.url);
 let html = await readFile(path, "utf8");
+html = await inlineBrowserIcons(html);
 const notices = await readFile(new URL("../assets/third-party-notices.txt", import.meta.url), "utf8");
 const escapedNotices = notices.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 html = html.replace("</body>", `<template id="third-party-notices">${escapedNotices}</template></body>`);
@@ -25,4 +27,5 @@ await writeFile(new URL("../dist/recovery.html", import.meta.url), html);
 // This is the pristine built application, never a serialization of live form
 // state. Downloading it cannot include contacts, movements, or generated pads.
 await writeFile(new URL("../dist/sharekeeper-offline.html", import.meta.url), html);
+await removeEmittedFaviconFiles(new URL("../dist/", import.meta.url));
 console.log("Built identical recovery.html and offline copies; outbound connections blocked.");

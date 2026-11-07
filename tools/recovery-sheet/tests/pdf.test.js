@@ -95,11 +95,16 @@ test("creates one original-size A2 page, with exactly 80 pad letters per keeper"
 
 test("bundled source checksum matches the untouched repository template", async () => {
   const source = await readFile(new URL("../../../templates/recovery/slip39_recovery_sheet.pdf", import.meta.url));
-  assert.equal(SOURCE_TEMPLATE_SHA256, "e2305bc78fee87e357f15bf67462c0cba9a98f2bec28e64d55b68933857ee270");
+  assert.equal(SOURCE_TEMPLATE_SHA256, "fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6");
   assert.equal(createHash("sha256").update(source).digest("hex"), SOURCE_TEMPLATE_SHA256);
   const document = await PDFDocument.load(source);
   const original = contentStreams(document, document.getPages()[0]).join("\n");
   assert.ok(original.includes("7-day release time"));
+  assert.ok(original.includes("(6. Decrypt locally on scratch paper. Enter each four-letter word prefix into a HW)"));
+  assert.ok(original.includes("(7. Destroy scratch paper after entering into a HW wallet.)"));
+  assert.ok(original.includes("(8. Sign and broadcast a tx, then wipe the HW wallet clean.)"));
+  assert.equal((original.match(/\(Empty\)/g) ?? []).length, 7);
+  assert.doesNotMatch(original, /Authentication \/ notice|Release due/);
 });
 
 test("bundled derivative retains the reviewed eight-cell CRC32 and relocated prefix geometry", async () => {
@@ -110,27 +115,66 @@ test("bundled derivative retains the reviewed eight-cell CRC32 and relocated pre
   assert.equal((background.match(/\(FIRST 2 CIPHER GROUPS\)/g) ?? []).length, 5);
   assert.ok(background.includes("(5. Receive all 20 groups; verify the stored CRC32 before decryption.)"));
   assert.doesNotMatch(background, /SHA-256|64 hex digits|7-day|FIRST 2 CIPHERTEXT GROUPS|\(Empty\)/);
+  assert.doesNotMatch(background, /Authentication \/ notice|Release due|Validate each complete mnemonic|Restore on a compatible offline device/);
+  // Every source text literal not explicitly replaced remains, in order.
+  // This protects the new steps 6-8 (including the incomplete "HW" ending),
+  // all seven wallet-row numbers, and all original field/legend wording.
+  const source = await readFile(new URL("../../../templates/recovery/slip39_recovery_sheet.pdf", import.meta.url));
+  const sourceDocument = await PDFDocument.load(source);
+  const original = contentStreams(sourceDocument, sourceDocument.getPages()[0]).join("\n");
+  const literals = (stream) => [...stream.matchAll(/^BT [^\n]* TL (\(.*\)) Tj T\* ET$/gm)].map(([, value]) => value);
+  const contactLabels = new Set([
+    "(Name:)", "(Street Address:)", "(Street Address 2:)", "(State/Country Postal Code:)",
+    "(Account No.:)", "(Phone:)", "(Website:)", "(Empty)",
+  ]);
+  const retained = literals(original).filter((value) =>
+    !value.startsWith("(3 OF 5  |") && !value.startsWith("(4. Complete agreed ID checks;") &&
+    !/^\(SHARE 0[1-5]\)$/.test(value) && !contactLabels.has(value));
+  assert.equal(literals(original).length - retained.length, 49);
+  assert.deepEqual(literals(background), retained);
   const rectangles = [...background.matchAll(/^n ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re S$/gm)]
     .map(([, x, y, width, height]) => ({ x: Number(x), y: Number(y), width: Number(width), height: Number(height) }));
   const checksumCells = rectangles.filter(({ width, height }) => width === 20 && height === 20);
   const prefixCells = rectangles.filter(({ width, height }) => width === 14.2 && height === 26);
   const padCells = rectangles.filter(({ width, height }) => width === 16 && height === 26);
+  const emptyPassphraseCheckboxes = rectangles.filter(({ width, height }) => width === 7 && height === 7);
+  const sourceFonts = document.getPages()[0].node.Resources().lookup(PDFName.of("Font"));
+  const sourceBoldDescriptor = sourceFonts.lookup(PDFName.of("F2+0")).lookup(PDFName.of("FontDescriptor"));
+  const sourceBold = fontkit.create(decodePDFRawStream(sourceBoldDescriptor.lookup(PDFName.of("FontFile2"))).decode());
+  // Measure the retained source bold font, not a surrogate font-size rectangle.
+  // Prefix headings must clear both their entry-box stroke and the contact rule.
+  for (const label of ["01", "02"]) {
+    for (const glyph of sourceBold.layout(label).glyphs) {
+      const scale = 9.5 / sourceBold.unitsPerEm;
+      assert.ok(1213.53 + glyph.bbox.minY * scale - (1212.78 + 0.55 / 2) >= 0.325);
+      assert.ok(1221.28 - PDF_CONTACT_FRAME.ruleThickness / 2 - (1213.53 + glyph.bbox.maxY * scale) >= 0.325);
+    }
+  }
   assert.equal(checksumCells.length, 5 * 8);
   assert.equal(prefixCells.length, 5 * 2 * 4);
   assert.equal(padCells.length, 5 * 80);
+  assert.equal(emptyPassphraseCheckboxes.length, 7);
   for (let slot = 0; slot < 5; slot += 1) {
     assert.deepEqual(checksumCells.slice(slot * 8, slot * 8 + 8), Array.from({ length: 8 }, (_, cell) => ({
       x: Number((575.4121 + cell * 20).toFixed(4)),
-      y: Number((1197.78 - slot * 212).toFixed(2)),
+      y: Number((1207.78 - slot * 200).toFixed(2)),
       width: 20,
       height: 20,
     })));
     assert.deepEqual(prefixCells.slice(slot * 8, slot * 8 + 8), Array.from({ length: 8 }, (_, cell) => ({
       x: Number(((cell < 4 ? 201 : 269) + (cell % 4) * 14.2).toFixed(1)),
-      y: Number((1174.78 - slot * 212).toFixed(2)),
+      y: Number((1186.78 - slot * 200).toFixed(2)),
       width: 14.2,
       height: 26,
     })));
+    padCells.slice(slot * 80, (slot + 1) * 80).forEach((cell, index) => {
+      const group = Math.floor(index / 4);
+      assert.ok(Math.abs(cell.x - (371 + (group % 10) * 78.8551 + (index % 4) * 16)) < 0.001);
+      assert.equal(cell.y, Number((1294.78 - Math.floor(group / 10) * 46 - slot * 200).toFixed(2)));
+    });
+    for (const [x, label] of [["222.442", "01"], ["290.442", "02"]]) {
+      assert.ok(background.includes(`BT 1 0 0 1 ${x} ${(1213.53 - slot * 200).toFixed(2)} Tm /F2+0 9.5 Tf 11.4 TL (${label}) Tj T* ET`));
+    }
   }
 });
 
@@ -156,8 +200,9 @@ test("3/4/5-keeper exports preserve exact contacts and never populate ciphertext
     }
     for (let slot = 0; slot < 5; slot += 1) {
       const blankAreas = [
-        { left: 201, right: 325.8, bottom: 1174.78 - slot * 212, top: 1200.78 - slot * 212 },
-        { left: 575.4121, right: 735.4121, bottom: 1197.78 - slot * 212, top: 1217.78 - slot * 212 },
+        { left: 201, right: 325.8, bottom: 1186.78 - slot * 200, top: 1212.78 - slot * 200 },
+        { left: 575.4121, right: 735.4121, bottom: 1207.78 - slot * 200, top: 1227.78 - slot * 200 },
+        { left: 75, right: 1160.551, bottom: 91.18, top: 285.78 },
       ];
       for (const run of runs.filter(({ value }) => value.trim())) {
         const bounds = measurePdfGlyphBounds(run.value, run.size);
@@ -171,7 +216,11 @@ test("3/4/5-keeper exports preserve exact contacts and never populate ciphertext
     const padRuns = runs.filter(({ size }) => size === 17);
     assert.equal(padRuns.length, count * 80);
     input.pads.forEach((pad, index) => {
-      assert.equal(padRuns.slice(index * 80, (index + 1) * 80).map(({ value }) => value).join(""), pad);
+      const letters = padRuns.slice(index * 80, (index + 1) * 80);
+      assert.equal(letters.map(({ value }) => value).join(""), pad);
+      letters.forEach((run, letter) => {
+        assert.ok(Math.abs(run.y - (1294.78 - Math.floor(letter / 40) * 46 - index * 200 + 6.6)) < 1e-9);
+      });
     });
     assert.equal(values.filter((value) => /SLOT \d{2}  \|  NOT USED/.test(value)).length, 5 - count);
   }

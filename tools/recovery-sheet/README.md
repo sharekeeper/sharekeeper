@@ -60,6 +60,8 @@ The newest supplied sample replaces its previous ciphertext SHA-256 field with C
 
 The supplied PDF remains unchanged at `../../templates/recovery/slip39_recovery_sheet.pdf`. A derived blank background strips inherited Content Credentials and the fixed seven-day instruction at the content-stream level; the generated worksheet instead refers to the user's agreed release policy. It does not implement or enforce a custody agreement.
 
+The latest source revision has more compact keeper sections, no authentication/notice or release-due header fields, and seven account/wallet rows. Its new recovery instructions are retained as supplied in the source and derivative, including the incomplete wording at the end of step 6. They remain prototype material requiring procedural review; this tool does not enter data into a hardware wallet, sign or broadcast transactions, destroy paper, or wipe a device.
+
 Asset provenance and regeneration instructions are in `assets/README.md`. The derivative PDF is a printable static worksheet, not an editable AcroForm; editable template source has not been supplied.
 
 ## Verification

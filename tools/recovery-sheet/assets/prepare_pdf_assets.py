@@ -20,7 +20,7 @@ import pypdf
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "templates/recovery/slip39_recovery_sheet.pdf"
-EXPECTED_SOURCE_SHA256 = "e2305bc78fee87e357f15bf67462c0cba9a98f2bec28e64d55b68933857ee270"
+EXPECTED_SOURCE_SHA256 = "fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6"
 FONT = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
 COPYRIGHT = Path("/usr/share/doc/fonts-dejavu-core/copyright")
 
@@ -30,19 +30,41 @@ reader = pypdf.PdfReader(SOURCE)
 writer = pypdf.PdfWriter()
 page = writer.add_page(reader.pages[0])
 stream = page.get_contents().get_data().decode("latin1")
-# These source literals and rectangles are retained verbatim, never populated.
+# These source literals and entry rectangles are retained, never populated.
 # The source checksum is CRC32 of ciphertext, not SHA-256 or a checksum of K.
 assert stream.count("(Expected Ciphertext CRC32:)") == 5
 assert stream.count("(8 hex digits)") == 5
 assert stream.count("(FIRST 2 CIPHER GROUPS)") == 5
 assert "(5. Receive all 20 groups; verify the stored CRC32 before decryption.)" in stream
+assert "(6. Decrypt locally on scratch paper. Enter each four-letter word prefix into a HW)" in stream
+assert "(7. Destroy scratch paper after entering into a HW wallet.)" in stream
+assert "(8. Sign and broadcast a tx, then wipe the HW wallet clean.)" in stream
+assert "(Authentication / notice" not in stream
+assert "(Release due" not in stream
+assert stream.count("(Empty)") == 7
 assert "SHA-256" not in stream
 rectangles = re.findall(r"^n ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re S$", stream, re.MULTILINE)
 assert sum(width == "20" and height == "20" for _, _, width, height in rectangles) == 40
 for slot in range(5):
     for cell in range(8):
-        expected = (f"{575.4121 + cell * 20:.4f}", f"{1197.78 - slot * 212:.2f}", "20", "20")
+        expected = (f"{575.4121 + cell * 20:.4f}", f"{1207.78 - slot * 200:.2f}", "20", "20")
         assert expected in rectangles, f"Source CRC32 cell moved: {expected}"
+# The source's 14.5pt contact rows are too short for the derivative's exact
+# two-line email/web values at >=8pt. Keep seven 17pt derivative rows. Only the
+# ten prefix group-number headings move down 3.25pt and reduce 10 -> 9.5pt to
+# clear those rows; their text and the blank prefix boxes are not changed.
+for slot in range(5):
+    for x, label in (("222.442", "01"), ("290.442", "02")):
+        old = (
+            f"BT 1 0 0 1 {x} {1216.78 - slot * 200:.2f} Tm "
+            f"/F2+0 10 Tf 12 TL ({label}) Tj T* ET"
+        )
+        new = (
+            f"BT 1 0 0 1 {x} {1213.53 - slot * 200:.2f} Tm "
+            f"/F2+0 9.5 Tf 11.4 TL ({label}) Tj T* ET"
+        )
+        assert stream.count(old) == 1, f"Source prefix heading changed: {old}"
+        stream = stream.replace(old, new)
 contact_labels = (
     "(Name:)", "(Street Address:)", "(Street Address 2:)",
     "(State/Country Postal Code:)", "(Account No.:)", "(Phone:)", "(Website:)",
@@ -58,7 +80,7 @@ for line in stream.splitlines():
         or "(Empty)" in line
     )
     (removed if replace else kept).append(line)
-assert len(removed) == 47, f"Source template changed: reviewed 47 replacements, got {len(removed)}"
+assert len(removed) == 49, f"Source template changed: reviewed 49 replacements, got {len(removed)}"
 content = pypdf.generic.DecodedStreamObject()
 content.set_data(("\n".join(kept) + "\n").encode("latin1"))
 page[pypdf.generic.NameObject("/Contents")] = writer._add_object(content)

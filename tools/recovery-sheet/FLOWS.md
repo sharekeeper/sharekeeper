@@ -13,7 +13,9 @@ The hosted baseline was opened before these edits. It shows the supplied domain 
 
 - Open and download the blank sample from Home, Standard, or Tools.
 - Expect: The latest supplied PDF, preserved byte-for-byte, with FIRST 2 CIPHER GROUPS and an eight-hex-digit Expected Ciphertext CRC32 field.
+- For the newest uploaded revision, expect SHA-256 `fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6`, seven blank account/wallet records, and the revised, more compact keeper layout in the actual download and thumbnail.
 - Generate sheets for 3, 4, and 5 keepers. Expect: Correct private K-pad placement, blank ciphertext/CRC32/passphrase fields, and explicit inactive slots.
+- Inspect every generated keeper block against the new layout. Expect: All 80 letters remain inside the twenty four-cell groups; contact ink, prefix labels, and eight CRC32 cells do not collide; supported two-line contacts remain readable at a minimum of eight points.
 - Expect: Educational copy distinguishes a CRC32 checksum from cryptographic authentication; the generator does not calculate a checksum of a pad and mislabel it as ciphertext.
 - The original sample's seven-day notice remains in that source. The derivative worksheet remains policy-neutral and the website explains open specification decisions.
 - The protocol-diagram PDF is removed from the current repository, build output, and all website/download links.
@@ -86,3 +88,4 @@ The hosted baseline was opened before these edits. It shows the supplied domain 
 - Carry the logo's representative navy and light cyan through headings, primary actions, selected keeper options, progress states, and entropy collection; retain white paper surfaces and dark ink.
 - Inspect setup, contacts, entropy, review, ready, and clear-dialog states on desktop and at 375 px. Check focus, selected/disabled states, contrast, header fit, and horizontal overflow.
 - Preserve the latest supplied blank sample byte-for-byte; website branding must not recolor that source PDF. Keep pad generation, contact handling, and two-source entropy behavior intact.
+- Expect the supplied standalone mark as a valid browser favicon in the portal, separate recovery document, and downloaded offline copy. Inspect both embedded PNG and multi-resolution ICO assets, verify the browser can decode the icon, and preserve the no-network recovery policy. A website cannot replace a browser-controlled address-bar security indicator.
