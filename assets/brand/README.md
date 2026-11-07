@@ -1,13 +1,13 @@
 # Sharekeeper logo prototypes
 
-These files preserve the original, unmodified logo prototypes supplied by the project founder. They are design references, not an approved final identity.
+These canonical files preserve the latest, unmodified logo prototypes supplied by the project founder. They are design references, not an approved final identity.
 
 ## Standalone mark
 
 - **File:** `logo-prototype.png`
 - **Original filename:** `logo-small.png`
 - **Status:** Prototype
-- **SHA-256:** `899af41c2c1b3028cff27a2e925bd6c29b792e5dcfdbe19f6cd79b3088a13b45`
+- **SHA-256:** `6c0a7ba02a7ac486282a4546b6701689b11d6daa53f2a2625938ba902ffdbf6b`
 - **License:** Not yet specified
 
 ## Domain lockup
@@ -15,7 +15,7 @@ These files preserve the original, unmodified logo prototypes supplied by the pr
 - **File and original filename:** `logo-with-domain.png`
 - **Displayed wordmark:** `ShareKeeper.org`
 - **Status:** Prototype
-- **SHA-256:** `f2343f13fa6203b676cbc04bba88cc6983ed5371d0a7cca9230209c981335bbe`
+- **SHA-256:** `2617dbe18e7e8501be1fd40c727fe39aa75b0dd35f5bafb698c5d6fac04d004e`
 - **License:** Not yet specified
 
-Keep these originals intact. Add vector, small-size, monochrome, and production-ready variants as separate assets when approved.
+Earlier uploads remain intact in Git history. Replace the canonical files only with new user-supplied revisions, preserving the uploaded bytes, and add vector, small-size, monochrome, and production-ready variants as separate assets when approved.
