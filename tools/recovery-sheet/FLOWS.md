@@ -101,3 +101,11 @@ The hosted baseline was opened before these edits. It shows the supplied domain 
 - Inspect setup, contacts, entropy, review, ready, and clear-dialog states on desktop and at 375 px. Check focus, selected/disabled states, contrast, header fit, and horizontal overflow.
 - Preserve the latest supplied blank sample byte-for-byte; website branding must not recolor that source PDF. Keep pad generation, contact handling, and two-source entropy behavior intact.
 - Expect the supplied standalone mark as a valid browser favicon in the portal, separate recovery document, and downloaded offline copy. Inspect both embedded PNG and multi-resolution ICO assets, verify the browser can decode the icon, and preserve the no-network recovery policy. A website cannot replace a browser-controlled address-bar security indicator.
+
+## Updated dashed-sector logos
+
+- Baseline: The public canonical homepage was opened before editing; its current header image decoded at 784 by 261 pixels.
+- Replace both canonical logo files with the latest supplied upload bytes, retaining earlier revisions in Git history. The new mark has dashed outlines on the two white sectors; preserve the supplied artwork and wordmark without redrawing or recoloring.
+- Regenerate the web lockup and PNG/ICO favicons. Verify the updated lockup in all portal routes and generator stages at desktop and 375 px, and verify exact new icon bytes embedded in portal, recovery, and pristine offline HTML.
+- Replay the main flows above, including real PDF and offline downloads, before release. The source recovery-sheet PDF, geometry, crypto, contact validation, provider data, and intake behavior must remain unchanged.
+- Publish the same reviewed build to the canonical website, existing app preview, and independent distribution mirror. Open fresh anonymous hosted contexts and compare all deployed hashes, header artwork, and icons before reporting completion.

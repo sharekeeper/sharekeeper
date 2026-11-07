@@ -8,8 +8,20 @@ test("favicon source remains the supplied standalone logo", async () => {
   const source = await readFile(new URL("../../../assets/brand/logo-prototype.png", import.meta.url));
   assert.equal(
     createHash("sha256").update(source).digest("hex"),
-    "03c9971a93b793ffa7f967b4e6c49376bfe49e6694b271ee412afd8364d15b04",
+    "86f7ae7e8bdf6b3d1e17705f67064464a09ddeafc6dcd0f2e620879c50282149",
   );
+  assert.equal(source.readUInt32BE(16), 1254);
+  assert.equal(source.readUInt32BE(20), 1254);
+});
+
+test("domain lockup source remains the latest supplied unmodified logo", async () => {
+  const source = await readFile(new URL("../../../assets/brand/logo-with-domain.png", import.meta.url));
+  assert.equal(
+    createHash("sha256").update(source).digest("hex"),
+    "bbd14084bb740bfc7e07f9d303fe2b83ad7104be1f72d81b94d03f780b8de3c7",
+  );
+  assert.equal(source.readUInt32BE(16), 2172);
+  assert.equal(source.readUInt32BE(20), 724);
 });
 
 test("browser icons include a 32px PNG and three valid ICO resolutions", async () => {

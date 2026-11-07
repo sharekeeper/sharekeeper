@@ -2,6 +2,15 @@
 
 All functional and visual checks use synthetic contact details and disposable test pads. Never save a real recovery sheet or real user secrets as test evidence.
 
+## Updated dashed-sector logos
+
+The latest supplied standalone mark and domain lockup were preserved byte-for-byte, with earlier versions retained in Git history. Only canonical branding files, their resized web/icon derivatives, provenance tests, and verification documentation changed; application logic, styles, PDF assets, crypto, intake, and directory data remain unchanged.
+
+- **Provenance and build:** All 57 tests pass, including exact source hashes/dimensions for both PNGs. The existing asset script produced the lockup and PNG/ICO icons without redrawing or recoloring. Independent review confirmed the exact new WebP and both icon files are embedded in all three HTML documents, script hashes match CSPs, recovery/offline files remain identical, and the dependency audit reports zero known vulnerabilities.
+- **Portal replay:** All six routes were exercised at desktop and 375 px with the new lockup and icons. Threshold and FAQ toggle cycles, directory filters/reset, mobile menu/Escape, live desktop/mobile/desktop resizing, and local draft validation/review/JSON download/edit/clear passed without application page errors. The native hosted form and explicitly loaded embed each rendered 15 fields; no actual application was submitted.
+- **Recovery replay:** The new branding loaded throughout setup, contacts, entropy, review, and generated-output states. A three-keeper desktop mouse/reset/recollection flow, four-keeper offline timing flow, and five-keeper mobile-emulation timing flow downloaded actual PDFs that passed qpdf. Overlong input remained intact and was rejected, review editing preserved contacts, acknowledgments gated generation, repeat downloads were identical, and reveal/hide plus clear cancel/confirm passed.
+- **Offline and source fidelity:** The actual offline download exactly matched the pristine build, displayed the new artwork/icons, and generated its four-keeper PDF with networking disabled and zero HTTP requests. The sample PDF remains byte-identical to source SHA-256 `fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6`. No physical-phone or formal cryptographic audit claim is implied.
+
 ## Portal and provider registry
 
 - **Navigation:** Home, Standard, Learn, Tools, Providers, and Apply work through real controls, direct hash routes, and browser Back. The separate recovery document is reachable from Tools.
