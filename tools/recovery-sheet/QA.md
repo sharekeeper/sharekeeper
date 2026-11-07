@@ -39,6 +39,16 @@ Inspect setup, contact entry, entropy collection, review, and generated-output s
 
 ## Public HTTPS deployment and navigation hotfix
 
+### Canonical-domain verification
+
+On 2026-11-07, the [canonical website](https://sharekeeper.org/) and [recovery document](https://sharekeeper.org/recovery.html) were independently opened in fresh anonymous contexts over normal TLS, without ignored certificate errors or a login. The stalled certificate was repaired using one controlled, documented GitHub provisioning restart; HTTPS enforcement is enabled and all apex/`www` HTTP/HTTPS entry points converge on the secure apex.
+
+- **Desktop:** All six portal routes rendered their correct headings. Tools opened the separate recovery document; its Tools and Provider directory links opened the matching canonical-origin portal routes. A three-keeper interview with supported accented and two-line contacts, 96 mouse movements, both acknowledgments, generation, actual PDF download, and clear/reset completed without application page errors. The 125,575-byte downloaded PDF passed qpdf.
+- **Mobile emulation:** At 375 by 812, the portal routes had no horizontal overflow. The mobile menu, Tools-to-generator navigation, three-keeper interview, 12 timing taps, first Review tap, acknowledgments, generation, actual 125,180-byte PDF download, and clear/reset passed without page errors. This is timing-mode emulation, not physical-phone or post-drawing touch certification.
+- **Published assets:** Portal SHA-256 is `3562f53d37742d55eeacf6e0d29ddbca5077aec9dcad98153d7bb68cebfba6e2`; recovery and pristine offline SHA-256 are `0e00513d0c26c536fca3d6c1f0d5ca74a29dc8d855d2c309badce562984d26b7`; the sample remains `fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6`. The seven-row miniature and favicon were present. No provider form submission or durable response readback was performed.
+
+### Independent deployment verification
+
 Verified on 2026-11-07 using fresh anonymous Chromium contexts, synthetic contacts, and disposable pads. The [independent HTTPS generator](https://sharekeeper.github.io/sharekeeper-app/recovery.html) was opened as an actual application, not merely a public artifact wrapper; a three-keeper private PDF was generated and downloaded before sharing that address.
 
 - **Final automated checks:** All 56 tests pass, including five public-URL resolution cases. Independent source/build review and the dependency audit found no blocking issue or known locked-dependency vulnerability at verification time.
