@@ -1,6 +1,6 @@
 # Main flows
 
-The hosted baseline was opened before these edits. It shows the setup question, 3/4/5 keeper choices, and fixed-threshold labels 3-of-3, 3-of-4, and 3-of-5; the application has no database or persistent user storage.
+The hosted baseline was opened before these edits. It shows the supplied domain logo, the setup question, 3/4/5 keeper choices, and the fixed-threshold explanation; the application has no database or persistent user storage.
 
 ## Select and interview keepers
 
@@ -47,3 +47,10 @@ The hosted baseline was opened before these edits. It shows the setup question, 
 - Label the small preview as a private-pad worksheet, distinct from actual SLIP-39 share generation.
 - Check the real hosted PDF and offline-copy download controls in a fresh browser context.
 - Connect the custom domain only after the GitHub Pages deployment is healthy and Namecheap access is available; preserve unrelated DNS records.
+
+## Logo-led website colors
+
+- Use the latest supplied ShareKeeper.org domain lockup unchanged, with a web-serving copy rather than a redrawn logo.
+- Carry the logo's representative navy and light cyan through headings, primary actions, selected keeper options, progress states, and entropy collection; retain white paper surfaces and dark ink.
+- Inspect setup, contacts, entropy, review, ready, and clear-dialog states on desktop and at 375 px. Check focus, selected/disabled states, contrast, header fit, and horizontal overflow.
+- Keep the recovery-sheet PDF template, pad generation, contact handling, and two-source entropy behavior unchanged.

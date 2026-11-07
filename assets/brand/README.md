@@ -19,3 +19,9 @@ These canonical files preserve the latest, unmodified logo prototypes supplied b
 - **License:** Not yet specified
 
 Earlier uploads remain intact in Git history. Replace the canonical files only with new user-supplied revisions, preserving the uploaded bytes, and add vector, small-size, monochrome, and production-ready variants as separate assets when approved.
+
+## Website palette
+
+The website uses the supplied domain lockup and a palette derived from the latest logo: representative navy `#000461`, light cyan `#A6E7FE`, white, and black/dark ink. Lighter blue surfaces and accessible text shades are derived UI colors, not additional colors imposed on the original artwork.
+
+These are website theme references sampled from a raster prototype, not a finalized spot-color or print identity specification. The recovery-sheet PDF template is not recolored by the website theme.

@@ -38,5 +38,6 @@ Touch movement was browser-emulated; this does not certify every physical phone 
 - **State and validation:** Repeat downloads were byte-identical. Pad reveal/hide, clear cancel/confirm, missing contact errors, overlength-input retention, and unsupported-glyph failures were checked. Editing was disabled during intentionally slowed cryptographic generation.
 - **Layout:** Setup, contact, entropy, review, and ready states were inspected at desktop and 375 px. A live desktop/mobile/desktop resize, a short desktop window, and a 720-by-500 CSS-pixel viewport equivalent to 200% on a 1440-by-1000 viewport showed no horizontal overflow.
 - **Review fixes:** An asynchronous generation/edit race, native input truncation, and two-line PDF descender collisions were found and fixed. Geometry tests now check actual glyph bounds at a minimum eight-point PDF size.
+- **Logo-led theme:** The current supplied logo loads at desktop and mobile sizes. Navy/cyan controls, selected and disabled states, progress markers, contact entry, entropy, review, ready, and clear-dialog states were checked; all main flows were replayed after the color-only update, and the original recovery-sheet checksum remained unchanged.
 
 The hosted-preview download checks are performed after deployment. No live recovery material was used in this verification.
