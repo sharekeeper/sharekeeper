@@ -18,4 +18,10 @@ The sketch and the latest [recovery-sheet prototype](../../templates/recovery/sl
 - **Entry-field roles and hash format:** The latest sheet retains a K/C/P legend, but its twenty entry groups are no longer split into separately labeled K and C rows. It asks for ciphertext SHA-256 verification before decryption but no longer states the byte-level hash serialization. Confirm what each entry field stores and specify the exact encoding, pad length, and bytes to hash before implementation.
 - **Release timing:** The flow sketch specifies a two-business-day wait for live-video and notarized-remote releases, no remote hold for in-person releases, and a separate two-business-day contact-change hold. The recovery sheet instructs the client to retain notice of a seven-day release time.
 
-Resolve these parameters explicitly before producing a unified standard, implementation, or production recovery template. This intake note does not establish security, legal sufficiency, or wallet interoperability.
+Resolve these parameters explicitly before treating a standard, implementation, or recovery template as protocol-conformant production material. This intake note does not establish security, legal sufficiency, or wallet interoperability.
+
+## Browser generator profile
+
+The [browser recovery-sheet generator](../../tools/recovery-sheet/README.md) is a separate, limited prototype: it interviews 3–5 keepers and fills a derivative worksheet with private K pads using an explicit 80-letter, 20-by-4 profile. Its two entropy inputs are browser cryptographic randomness and user movement/timing, mixed locally with HKDF-SHA-256.
+
+That tool does not generate or encrypt SLIP-39 shares, resolve the diagram's 100-character profile, or implement a release policy. Its derivative replaces the source sheet's fixed release-delay instruction with a reference to the agreed policy; the original supplied PDFs remain unchanged.

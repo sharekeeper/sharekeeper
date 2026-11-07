@@ -1,3 +1,6 @@
 # Preserve supplied image and PDF assets byte-for-byte without text conversion.
 *.png binary
 *.pdf binary
+*.webp binary
+# Third-party notices intentionally retain upstream whitespace and line endings.
+tools/recovery-sheet/assets/third-party-notices.txt -text -whitespace

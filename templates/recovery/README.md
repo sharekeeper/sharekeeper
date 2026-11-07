@@ -17,3 +17,7 @@ The [protocol-flow sketch notes](../../docs/protocol/README.md#cross-artifact-de
 ## Secret-handling boundary
 
 Only blank templates and explicitly labeled synthetic test fixtures belong in this repository. Never commit completed recovery sheets, live shares or seed phrases, secret pads, wallet passphrases, or other live recovery data.
+
+## Browser generator
+
+The [browser-only generator](../../tools/recovery-sheet/README.md) creates a derivative worksheet with user-entered contact information and explicitly labeled private K pads. It leaves ciphertext prefixes, ciphertext hashes, and wallet/passphrase entries blank and does not modify this supplied prototype PDF.
