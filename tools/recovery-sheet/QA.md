@@ -40,4 +40,4 @@ Touch movement was browser-emulated; this does not certify every physical phone 
 - **Review fixes:** An asynchronous generation/edit race, native input truncation, and two-line PDF descender collisions were found and fixed. Geometry tests now check actual glyph bounds at a minimum eight-point PDF size.
 - **Logo-led theme:** The current supplied logo loads at desktop and mobile sizes. Navy/cyan controls, selected and disabled states, progress markers, contact entry, entropy, review, ready, and clear-dialog states were checked; all main flows were replayed after the color-only update, and the original recovery-sheet checksum remained unchanged.
 
-The hosted-preview download checks are performed after deployment. No live recovery material was used in this verification.
+Hosted preview PDF download was verified. Its static offline-HTML link was observed to navigate instead of downloading, so the preview now offers Open standalone app in a new tab; that fresh session does not inherit contacts or keys. Verify the offline-copy download from the standalone GitHub Pages site. No live recovery material was used in this verification.

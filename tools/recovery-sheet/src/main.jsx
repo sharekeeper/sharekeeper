@@ -12,6 +12,9 @@ import logo from "../assets/logo-with-domain.webp";
 import "./style.css";
 
 const STEPS = ["Set up", "Sharekeepers", "Add entropy", "Generate sheet"];
+const PLATFORM_PREVIEW = globalThis.location?.hostname === "sites.pplx.app" ||
+  (globalThis.origin === "null" && globalThis.location?.protocol !== "file:");
+const STANDALONE_URL = "https://sharekeeper.github.io/sharekeeper/";
 const FIELD_LABELS = {
   name: "Sharekeeper name", reference: "Account / reference",
   phone: "Phone number", email: "Email address", website: "Website",
@@ -179,7 +182,9 @@ function App() {
       <img src={logo} alt="ShareKeeper.org" width="280" height="93" className="brand" data-testid="img-brand" onError={(e) => { e.currentTarget.hidden = true; }} />
       <div className="header-actions">
         <span className="local-label"><LockKeyhole size={15} aria-hidden="true" /> Browser-only workspace</span>
-        <a className="quiet-link" href="./sharekeeper-offline.html" download="sharekeeper-offline.html" data-testid="download-offline">Download offline app <Download size={15} aria-hidden="true" /></a>
+        {PLATFORM_PREVIEW
+          ? <a className="quiet-link" href={STANDALONE_URL} target="_blank" rel="noopener noreferrer" data-testid="open-standalone">Open standalone app <ArrowRight size={15} aria-hidden="true" /></a>
+          : <a className="quiet-link" href="./sharekeeper-offline.html" download="sharekeeper-offline.html" data-testid="download-offline">Download offline app <Download size={15} aria-hidden="true" /></a>}
       </div>
     </header>
     <div className="workspace">
@@ -271,7 +276,7 @@ function App() {
           {!cryptoReady && <p className="error-message" role="alert">Web Crypto is unavailable. Use a current browser in a secure context or the downloaded offline app. Generation is blocked; there is no weaker fallback.</p>}
           {failure && <p className="error-message" role="alert" data-testid="generation-error">{failure}</p>}
         </section>
-        <details className="scope-note main-scope"><summary data-testid="toggle-scope">About this prototype and its limits</summary><p>The 80-letter profile matches this sheet’s entry layout. It does not implement the draft diagram’s 100-character profile or resolve custody policy differences. The 3-of-N label is a layout setting, not proof that shares exist.</p><p>HKDF produces computationally derived key material. This prototype does not claim information-theoretic one-time-pad security or a measured entropy contribution from gestures.</p><p>A downloaded PDF contains secret pads. Clearing this tab cannot erase downloads, print queues, screenshots, or all browser memory.</p></details>
+        <details className="scope-note main-scope"><summary data-testid="toggle-scope">About this prototype and its limits</summary>{PLATFORM_PREVIEW && <p>For an offline app download, use Open standalone app. It opens a fresh GitHub Pages session; your current contacts and keys are not transferred.</p>}<p>The 80-letter profile matches this sheet’s entry layout. It does not implement the draft diagram’s 100-character profile or resolve custody policy differences. The 3-of-N label is a layout setting, not proof that shares exist.</p><p>HKDF produces computationally derived key material. This prototype does not claim information-theoretic one-time-pad security or a measured entropy contribution from gestures.</p><p>A downloaded PDF contains secret pads. Clearing this tab cannot erase downloads, print queues, screenshots, or all browser memory.</p></details>
         <footer className="panel-footer"><LockKeyhole size={14} aria-hidden="true" /><span>In-memory only. Refreshing or closing this tab loses the session.</span></footer>
       </main>
       <aside className="sheet-aside" aria-label="Your sheet profile">

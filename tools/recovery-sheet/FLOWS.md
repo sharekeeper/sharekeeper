@@ -39,6 +39,7 @@ The hosted baseline was opened before these edits. It shows the supplied domain 
 - Start: Any step.
 - Select Download offline app, open the downloaded HTML with networking disabled, and complete a test interview and generation.
 - Expect: The pristine self-contained application works without external requests and contains no prior session's contacts or keys.
+- In the platform preview, use Open standalone app instead: expect a new GitHub Pages tab with a fresh session, leaving the preview session intact. Download the offline copy from that standalone tab.
 
 ## Hosting and label clarification
 

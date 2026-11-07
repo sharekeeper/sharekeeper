@@ -17,6 +17,8 @@ Open the displayed local URL. `dist/index.html` and `dist/sharekeeper-offline.ht
 
 For private offline use, download the offline app before entering any contacts, disconnect from the network, and open that HTML file in a current browser. Generation fails closed if the required Web Crypto APIs are unavailable; do not disable browser security or substitute weaker randomness.
 
+The embedded platform preview cannot reliably download a static HTML file, so its header offers Open standalone app in a new GitHub Pages tab. Contacts and keys are not transferred; use that standalone version for the offline-app download.
+
 ## Interview and output
 
 - **Keepers:** Select 3, 4, or 5 and enter a name plus at least one contact channel for each. Account references, postal addresses, additional channels, and other optional fields are never invented.
