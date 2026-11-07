@@ -12,6 +12,20 @@ policy, and static "Empty" hints in the blank wallet table. Copying only the pag
 also removes the source document's Content Credentials attachments and catalog
 claims. The generated PDF is a modified prototype, not an attested original.
 
+The current source revision has SHA-256
+`e2305bc78fee87e357f15bf67462c0cba9a98f2bec28e64d55b68933857ee270`.
+Its ciphertext verification labels are `Expected Ciphertext CRC32:` and
+`8 hex digits`, with eight 20-by-20-point cells per keeper. The two relocated
+`FIRST 2 CIPHER GROUPS` use four 14.2-by-26-point cells each; the main pad
+grid remains twenty groups of four 16-by-26-point cells.
+
+The asset script pins the reviewed source hash and checks these checksum labels
+and cell geometry before bundling. The generator fills only contacts and the
+explicit 80-letter private K-pad grid; ciphertext prefixes and CRC32 cells stay
+blank, and it never computes a checksum of a pad. The source's seven-day release
+instruction stays intact in the canonical PDF; only the derivative replaces it
+with the agreed-release-policy wording.
+
 DejaVu Sans is embedded with subsetting in each PDF. Its license is included as
 `DejaVuSans-LICENSE.txt`. Latin accents, Greek, Cyrillic, and other characters in
 the font can be preserved; glyphs missing from the font are explicitly rejected.

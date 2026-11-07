@@ -21,8 +21,8 @@ const policy = [
   "form-action 'none'",
 ].join("; ");
 html = html.replace("<head>", `<head><meta http-equiv="Content-Security-Policy" content="${policy}">`);
-await writeFile(path, html);
+await writeFile(new URL("../dist/recovery.html", import.meta.url), html);
 // This is the pristine built application, never a serialization of live form
 // state. Downloading it cannot include contacts, movements, or generated pads.
 await writeFile(new URL("../dist/sharekeeper-offline.html", import.meta.url), html);
-console.log("Built self-contained online and offline copies; outbound connections blocked.");
+console.log("Built identical recovery.html and offline copies; outbound connections blocked.");

@@ -1,27 +1,18 @@
-# Sharekeeper protocol-flow sketch
+# Sharekeeper working protocol notes
 
-`sharekeeper-protocol-diagram.pdf` preserves the original, unmodified protocol-flow sketch supplied by the project founder. It is draft design input, not an approved normative standard or an audited recovery procedure.
+The current published material is the [latest blank recovery-sheet sample](../../templates/recovery/README.md), the website's draft explanations, and the limited browser generator. These are not a finalized normative standard, an audited recovery procedure, or proof of legal sufficiency or wallet interoperability.
 
-- **Original filename:** `sharekeeper-protocol-diagram.pdf`
-- **Status:** Sketch / prototype
-- **Length:** Four pages
-- **SHA-256:** `e37548a520a777403eb941d325c5533963bffdb55dae5435b38d5e895e0b0619`
-- **License:** Not yet specified
+The protocol-diagram PDF has been removed from the current repository and website at the owner's request. That file removal does not rewrite older Git commits.
 
-The sketch covers setup and enrollment, authentication and release, local recovery, and edge cases and lifecycle. Keep the supplied PDF intact and add reviewed revisions or editable source separately when available.
+## Open specification decisions
 
-## Cross-artifact decisions to reconcile
+- **Pad profile and field roles:** The sample contains twenty four-letter entry groups per share and a K/C/P legend, without separately labeled K and C rows or pad-generation instructions. The browser generator explicitly fills a derivative with private K pads using its own 80-letter profile; that implementation choice is not a final protocol specification.
+- **Ciphertext checksum:** The latest sample asks for an eight-hex-digit CRC32. The exact CRC32 variant, parameters, ciphertext encoding, and bytes to checksum still need specification. A checksum must not be treated as cryptographic authentication.
+- **Release policy:** The original sample retains a seven-day release-time instruction. The derivative generator instead refers to the agreed release policy. Verification, notice, delay, contact-change handling, and delivery terms need explicit agreement; this tool does not implement or enforce those terms.
+- **Recovery completeness:** Share generation, encryption, custody, decryption, compatible-device recovery, and a full offline recovery test are outside the current generator. A populated K-pad worksheet is not a complete backup.
 
-The sketch and the latest [recovery-sheet prototype](../../templates/recovery/slip39_recovery_sheet.pdf) leave the following parameters to reconcile or specify. These questions are recorded here without changing either supplied PDF or treating upload order as normative approval.
+## Browser generator boundary
 
-- **Pad length and encoding:** The flow sketch specifies an independent 100-character one-time pad for each share. The latest recovery sheet has a 20-word, four-letter-prefix header and twenty four-letter entry groups per share, but no longer states an 80-letter pad length or pad-generation rules. The earlier sheet's explicit 80-letter pad instruction remains in Git history; it must not be treated as an instruction in the current sheet.
-- **Entry-field roles and hash format:** The latest sheet retains a K/C/P legend, but its twenty entry groups are no longer split into separately labeled K and C rows. It asks for ciphertext SHA-256 verification before decryption but no longer states the byte-level hash serialization. Confirm what each entry field stores and specify the exact encoding, pad length, and bytes to hash before implementation.
-- **Release timing:** The flow sketch specifies a two-business-day wait for live-video and notarized-remote releases, no remote hold for in-person releases, and a separate two-business-day contact-change hold. The recovery sheet instructs the client to retain notice of a seven-day release time.
+The [browser recovery-sheet generator](../../tools/recovery-sheet/README.md) interviews 3–5 keepers and fills a derivative worksheet with private pads using an explicit 80-letter, 20-by-4 profile. Browser cryptographic randomness and user movement/timing are mixed locally with HKDF-SHA-256; this is computational derivation, not an information-theoretic one-time-pad claim.
 
-Resolve these parameters explicitly before treating a standard, implementation, or recovery template as protocol-conformant production material. This intake note does not establish security, legal sufficiency, or wallet interoperability.
-
-## Browser generator profile
-
-The [browser recovery-sheet generator](../../tools/recovery-sheet/README.md) is a separate, limited prototype: it interviews 3–5 keepers and fills a derivative worksheet with private K pads using an explicit 80-letter, 20-by-4 profile. Its two entropy inputs are browser cryptographic randomness and user movement/timing, mixed locally with HKDF-SHA-256.
-
-That tool does not generate or encrypt SLIP-39 shares, resolve the diagram's 100-character profile, or implement a release policy. Its derivative replaces the source sheet's fixed release-delay instruction with a reference to the agreed policy; the original supplied PDFs remain unchanged.
+The tool does not accept seed/share input or generate or encrypt SLIP-39 shares. Ciphertext-prefix groups, the eight-cell ciphertext CRC32 field, and the wallet/passphrase table remain blank; no checksum of a private K pad is calculated.

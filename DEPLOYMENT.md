@@ -1,12 +1,14 @@
 # Website deployment
 
-The recovery-sheet app is deployed from this repository with GitHub Actions. The repository, including source files, prototypes, and Git history, is public by explicit owner authorization; the website deployment itself contains only `tools/recovery-sheet/dist`.
+The Sharekeeper website and recovery-sheet app are deployed from this repository with GitHub Actions. The repository, including source files, prototypes, and Git history, is public by explicit owner authorization; the website deployment itself contains only `tools/recovery-sheet/dist`.
 
 ## Deployment boundaries
 
 - **Website:** The initial GitHub Pages address is [sharekeeper.github.io/sharekeeper](https://sharekeeper.github.io/sharekeeper/). The Pages API is configured with `build_type: workflow`, HTTPS enforcement enabled, and no custom domain.
 - **Published artifact:** `.github/workflows/deploy-pages.yml` uploads only `tools/recovery-sheet/dist`. It does not publish the repository root, documentation, source tree, or archived prototypes as website files.
-- **Browser-only operation:** The app has no application backend or build-time secrets. Secret generation and PDF creation run in the browser; do not add private account details, credentials, recovery material, or production secrets to this repository or deployment configuration.
+- **Separate documents:** The portal is `index.html`; the secret generator is `recovery.html`; `sharekeeper-offline.html` is an identical pristine generator copy. The portal and recovery scripts have separate CSPs. Provider intake must never be imported into the secret generator.
+- **Browser-only recovery:** Secret generation and PDF creation run in the browser, without application backends or build-time secrets. Do not add private account details, credentials, recovery material, private provider applications, or production secrets to this repository or deployment configuration.
+- **Approved directory only:** Public directory data must contain only approved, explicitly publishable business fields. Keep private intake responses in the private review service, not GitHub Issues or source files. Do not claim application success if only a local draft was created or an intake destination is unconfigured.
 - **Path compatibility:** The app's Vite configuration uses `base: "./"` so the built website supports both the project subpath and a future custom domain.
 
 ## Build and release
@@ -28,7 +30,7 @@ npm test
 npm run build
 ```
 
-After a release, confirm that the workflow completed successfully and open the website. Check that the recovery form, PDF generation, and downloaded offline HTML work, and that unrelated repository assets are not present in the deployed artifact.
+After a release, confirm that the workflow completed successfully and open the website. Check all portal routes, the directory and application states, the recovery interview, PDF generation, the updated blank sample, and the offline HTML. Confirm unrelated repository assets and private data are not present in the deployed artifact.
 
 ### Pages API configuration
 

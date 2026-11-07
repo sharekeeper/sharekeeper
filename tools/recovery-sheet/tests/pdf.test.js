@@ -4,7 +4,7 @@ import { PDFDocument, PDFName, decodePDFRawStream } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { FONT_BASE64, SOURCE_TEMPLATE_SHA256 } from "../src/pdf-assets.js";
+import { FONT_BASE64, SOURCE_TEMPLATE_SHA256, TEMPLATE_BASE64 } from "../src/pdf-assets.js";
 import {
   createRecoveryPdf,
   fitPdfContact,
@@ -36,9 +36,37 @@ function fixture(count = 3) {
 }
 
 function contentStreams(document, page) {
-  return page.node.Contents().asArray().map((reference) => {
+  const contents = page.node.Contents();
+  const references = typeof contents.asArray === "function" ? contents.asArray() : [contents];
+  return references.map((reference) => {
     const stream = document.context.lookup(reference);
     return new TextDecoder("latin1").decode(decodePDFRawStream(stream).decode());
+  });
+}
+
+// Decode the generated subset-font overlay via its actual ToUnicode map,
+// including multi-character ligatures. No external extraction tool is required.
+function overlayTextRuns(document, page, overlay) {
+  const fonts = page.node.Resources().lookup(PDFName.of("Font"));
+  const maps = new Map();
+  return [...overlay.matchAll(/BT\n([\s\S]*?)\nET/g)].map(([, block]) => {
+    const [, name, rawSize] = block.match(/\/(\S+) ([\d.]+) Tf/);
+    const [, rawX, rawY] = block.match(/1 0 0 1 ([\d.-]+) ([\d.-]+) Tm/);
+    const [, encoded] = block.match(/<([0-9A-F]*)> Tj/);
+    if (!maps.has(name)) {
+      const font = fonts.lookup(PDFName.of(name));
+      const cmap = new TextDecoder().decode(decodePDFRawStream(font.lookup(PDFName.of("ToUnicode"))).decode());
+      maps.set(name, new Map([...cmap.matchAll(/^<([0-9A-F]+)> <([0-9A-F]+)>$/gm)].map(([, code, unicode]) => [
+        code,
+        unicode.match(/.{4}/g).map((unit) => String.fromCharCode(parseInt(unit, 16))).join(""),
+      ])));
+    }
+    const mapping = maps.get(name);
+    const value = (encoded.match(/.{4}/g) ?? []).map((code) => {
+      assert.ok(mapping.has(code), `missing Unicode mapping for ${code}`);
+      return mapping.get(code);
+    }).join("");
+    return { value, size: Number(rawSize), x: Number(rawX), y: Number(rawY) };
   });
 }
 
@@ -67,7 +95,86 @@ test("creates one original-size A2 page, with exactly 80 pad letters per keeper"
 
 test("bundled source checksum matches the untouched repository template", async () => {
   const source = await readFile(new URL("../../../templates/recovery/slip39_recovery_sheet.pdf", import.meta.url));
+  assert.equal(SOURCE_TEMPLATE_SHA256, "e2305bc78fee87e357f15bf67462c0cba9a98f2bec28e64d55b68933857ee270");
   assert.equal(createHash("sha256").update(source).digest("hex"), SOURCE_TEMPLATE_SHA256);
+  const document = await PDFDocument.load(source);
+  const original = contentStreams(document, document.getPages()[0]).join("\n");
+  assert.ok(original.includes("7-day release time"));
+});
+
+test("bundled derivative retains the reviewed eight-cell CRC32 and relocated prefix geometry", async () => {
+  const document = await PDFDocument.load(Uint8Array.from(atob(TEMPLATE_BASE64), (character) => character.charCodeAt(0)));
+  const background = contentStreams(document, document.getPages()[0]).join("\n");
+  assert.equal((background.match(/\(Expected Ciphertext CRC32:\)/g) ?? []).length, 5);
+  assert.equal((background.match(/\(8 hex digits\)/g) ?? []).length, 5);
+  assert.equal((background.match(/\(FIRST 2 CIPHER GROUPS\)/g) ?? []).length, 5);
+  assert.ok(background.includes("(5. Receive all 20 groups; verify the stored CRC32 before decryption.)"));
+  assert.doesNotMatch(background, /SHA-256|64 hex digits|7-day|FIRST 2 CIPHERTEXT GROUPS|\(Empty\)/);
+  const rectangles = [...background.matchAll(/^n ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re S$/gm)]
+    .map(([, x, y, width, height]) => ({ x: Number(x), y: Number(y), width: Number(width), height: Number(height) }));
+  const checksumCells = rectangles.filter(({ width, height }) => width === 20 && height === 20);
+  const prefixCells = rectangles.filter(({ width, height }) => width === 14.2 && height === 26);
+  const padCells = rectangles.filter(({ width, height }) => width === 16 && height === 26);
+  assert.equal(checksumCells.length, 5 * 8);
+  assert.equal(prefixCells.length, 5 * 2 * 4);
+  assert.equal(padCells.length, 5 * 80);
+  for (let slot = 0; slot < 5; slot += 1) {
+    assert.deepEqual(checksumCells.slice(slot * 8, slot * 8 + 8), Array.from({ length: 8 }, (_, cell) => ({
+      x: Number((575.4121 + cell * 20).toFixed(4)),
+      y: Number((1197.78 - slot * 212).toFixed(2)),
+      width: 20,
+      height: 20,
+    })));
+    assert.deepEqual(prefixCells.slice(slot * 8, slot * 8 + 8), Array.from({ length: 8 }, (_, cell) => ({
+      x: Number(((cell < 4 ? 201 : 269) + (cell % 4) * 14.2).toFixed(1)),
+      y: Number((1174.78 - slot * 212).toFixed(2)),
+      width: 14.2,
+      height: 26,
+    })));
+  }
+});
+
+test("3/4/5-keeper exports preserve exact contacts and never populate ciphertext or CRC32 fields", async () => {
+  for (const count of [3, 4, 5]) {
+    const input = fixture(count);
+    input.keepers[0].address1 = "Line one\nLine two gpy";
+    input.keepers[0].reference = "  Exact CASE / ref.  ";
+    input.keepers[0].email = "gpy@example.invalid";
+    input.keepers[0].website = "https://gpy.invalid/gpy";
+    const document = await PDFDocument.load(await createRecoveryPdf(input));
+    const page = document.getPages()[0];
+    const overlay = contentStreams(document, page).at(-1);
+    const runs = overlayTextRuns(document, page, overlay);
+    const values = runs.map(({ value }) => value);
+    assert.ok(values.includes("4. Follow the agreed release policy; record the notice and release time."));
+    assert.ok(values.includes("Ciphertext prefixes, CRC32 and the wallet/passphrase table are intentionally blank. Agree the exact ciphertext checksum profile before use."));
+    assert.doesNotMatch(values.join("\n"), /SHA-256|64 hex|7-day/);
+    for (const keeper of input.keepers) {
+      for (const field of ["name", "address1", "address2", "region", "reference", "phone", "email", "website"]) {
+        for (const line of keeper[field].split("\n")) assert.ok(values.includes(line), `exact ${field}: ${line}`);
+      }
+    }
+    for (let slot = 0; slot < 5; slot += 1) {
+      const blankAreas = [
+        { left: 201, right: 325.8, bottom: 1174.78 - slot * 212, top: 1200.78 - slot * 212 },
+        { left: 575.4121, right: 735.4121, bottom: 1197.78 - slot * 212, top: 1217.78 - slot * 212 },
+      ];
+      for (const run of runs.filter(({ value }) => value.trim())) {
+        const bounds = measurePdfGlyphBounds(run.value, run.size);
+        for (const area of blankAreas) {
+          const intersects = run.x + bounds.maxX > area.left && run.x + bounds.minX < area.right &&
+            run.y + bounds.maxY > area.bottom && run.y + bounds.minY < area.top;
+          assert.equal(intersects, false, `must remain blank in slot ${slot + 1}: ${run.value}`);
+        }
+      }
+    }
+    const padRuns = runs.filter(({ size }) => size === 17);
+    assert.equal(padRuns.length, count * 80);
+    input.pads.forEach((pad, index) => {
+      assert.equal(padRuns.slice(index * 80, (index + 1) * 80).map(({ value }) => value).join(""), pad);
+    });
+    assert.equal(values.filter((value) => /SLOT \d{2}  \|  NOT USED/.test(value)).length, 5 - count);
+  }
 });
 
 test("font validation supports accented Latin, Greek and Cyrillic contacts", async () => {

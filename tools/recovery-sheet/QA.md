@@ -1,6 +1,19 @@
-# Recovery generator acceptance inventory
+# Sharekeeper website acceptance inventory
 
 All functional and visual checks use synthetic contact details and disposable test pads. Never save a real recovery sheet or real user secrets as test evidence.
+
+## Portal and provider registry
+
+- **Navigation:** Home, Standard, Learn, Tools, Providers, and Apply work through real controls, direct hash routes, and browser Back. The separate recovery document is reachable from Tools.
+- **Source fidelity:** The public sample download matches the latest supplied PDF byte-for-byte and visibly includes the first-two-cipher-groups labels and eight-cell CRC32 field.
+- **Scope:** Draft status is explicit. The 80-letter tool profile, unresolved checksum serialization, seven-day sample notice, and policy-neutral generator are not silently treated as an approved standard.
+- **Removed diagram:** The protocol-diagram PDF is absent from the current tracked tree, build output, and website links. Older Git history is not rewritten without separate authorization.
+- **Directory:** Initial data contains no invented providers. Search, service/jurisdiction filters, clearing filters, and empty states work. Only approved allowlisted public data may be rendered.
+- **Application:** Public business fields and private reviewer contact are distinguished. Required information and both publication/authority consents gate local draft review. The downloaded draft is marked not submitted.
+- **Intake truthfulness:** An unconfigured private intake must show a setup-needed state, not a Submit/success simulation. Once connected, verify the actual hosted form and durable private response store before claiming live submissions.
+- **Isolation:** The provider portal may permit an explicitly configured Google Forms frame. The recovery document remains independently bundled with outbound connections and forms blocked, and its offline copy remains byte-identical.
+- **Safety:** No provider application asks for recovery secrets, identity-document uploads, or private pads. CRC32 is not advertised as cryptographic authentication.
+- **Responsive checks:** Inspect every page at desktop and 375 px, mobile navigation, all form steps and errors, keyboard focus, a short desktop viewport, and desktop/mobile/desktop resizing.
 
 ## Required flows
 
@@ -24,7 +37,24 @@ Inspect setup, contact entry, entropy collection, review, and generated-output s
 - **Incomplete / edited contacts:** Jump ahead, return to review, remove contact details, then try generation. Validation must prevent incomplete output without losing the other contacts.
 - **Weak environment:** Browser without SubtleCrypto must not silently fall back. Synthetic or repeated gesture samples must never be advertised as measured security strength.
 
-## Local verification record
+## Full-site regeneration verification
+
+Verified in Chromium on 2026-11-07 after the updated CRC32 sample and removal of the protocol-diagram PDF. This is implementation testing and targeted code review, not a formal security or accessibility audit.
+
+- **Build and unit tests:** All 46 tests pass. The combined build produces the portal, a separate recovery document, its byte-identical offline copy, and only the latest blank recovery-sheet PDF.
+- **Portal routes:** All six routes render at desktop and 375 px without horizontal overflow. Header navigation, browser Back, table-of-contents links, six FAQ toggles, the 3-of-5 conceptual counter, directory search/service/reset controls, and the not-found return path were exercised.
+- **Visual fixes:** The mobile draft notice uses a readable full-width text column rather than a narrow flex column. The mobile hosted application button is visible in the initial 375-by-812 viewport. Live desktop/mobile/desktop resizing and a short 720-by-500 viewport were checked.
+- **Applications:** The native published Google Form opens anonymously and its explicitly loaded embedded version renders all 15 questions. The private owner editor route redirects an anonymous visitor to the responder view. No actual form submission has been made during this verification; durable response readback remains pending approval for one labeled synthetic test.
+- **Local drafts:** Empty validation, 161-character business-name retention and rejection, public/private review, real JSON download marked `not-submitted`, edit preservation, and clear cancel/confirm were exercised. No local draft is transferred to Google automatically.
+- **Recovery paths:** Three-keeper mouse input, five-keeper keyboard/timing input, and four-keeper touch-gesture collection generated actual CRC32-layout PDFs. Four-keeper Review navigation used the keyboard after the known CDP post-drag tap issue; this does not establish physical-device touch navigation.
+- **Generation guards:** Intentionally delayed real Web Crypto derivation confirmed that Edit, Back, and Clear are disabled during generation. Missing SubtleCrypto fails closed; missing/overlong contacts and unsupported Japanese glyphs produce explicit failures without truncation or issuing a PDF.
+- **Output and offline:** Actual browser PDFs for 3, 4, and 5 keepers pass qpdf checks and show correct 3-of-N labels and blank eight-digit CRC32 fields. Repeat downloads are byte-identical; reveal/hide and clear cancel/confirm work. Downloaded pristine HTML completes a full generation with networking disabled and zero HTTP requests.
+- **Link and removal checks:** The sample PDF, external SLIP-0039 reference, generator, and offline-download links were activated. No protocol-diagram file or link remains in the current source/build; older Git history has not been rewritten.
+- **Independent source review:** A separate read-only review found no remaining blocking privacy/security/status issue in the reviewed source and build. The portal has its own Google-frame permission, while recovery HTML has no provider intake URL, review code, or outbound connection/form permission.
+
+The first Review tap immediately following a CDP-emulated drag was still suppressed in this browser harness even when its DOM hit target and enabled state were correct. Touch movement collection and keyboard navigation work; physical-phone behavior is not certified by these tests.
+
+## Prior recovery-only verification
 
 Verified in Chromium on 2026-11-07 with synthetic contacts and disposable keys. This is implementation testing and targeted code review, not a formal cryptographic audit.
 

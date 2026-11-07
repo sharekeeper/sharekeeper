@@ -216,8 +216,10 @@ function text(page, font, value, x, y, size, color = INK) {
 }
 
 function drawContacts(page, font, rows, offset) {
-  // Keep the source's seven-row contact geometry, but allow wider values and an
-  // Email/web row. The background has no obsolete labels below this overlay.
+  // Keep seven 17pt derivative rows, including a two-line Email/web row. The
+  // revised source's contact rules are 16pt apart; this white area removes them.
+  // Our last rule is y1215.28, safely above the moved prefix labels at y1204.78
+  // and prefix boxes ending at y1200.78. No source label survives underneath.
   page.drawRectangle({ x: 41, y: 1214.78 - offset, width: 297, height: 121, color: WHITE });
   rows.forEach((row, index) => {
     const top = 1334.28 - offset - index * CONTACT_ROW_HEIGHT;
@@ -254,7 +256,7 @@ function drawPad(page, font, pad, offset) {
 /**
  * Generate a one-page A2 private-K recovery worksheet entirely in browser
  * memory. Contacts and pads are never fetched, persisted, logged, or uploaded.
- * This creates no mnemonic, ciphertext, authentication prefixes, or hash.
+ * This creates no mnemonic, ciphertext, ciphertext prefixes, or checksum.
  */
 export async function createRecoveryPdf({ keepers, pads, entropySummary }) {
   requireKeepers(keepers);
@@ -293,7 +295,7 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary }) {
   for (let index = 0; index < 5; index += 1) {
     const offset = index * 212;
     if (index >= keepers.length) {
-      // No fake contacts, pad letters, authentication values, or hashes.
+      // No fake contacts, pad letters, authentication values, or checksums.
       page.drawRectangle({ x: 31, y: 1166.78 - offset, width: 1128.5, height: 201, color: WHITE });
       text(page, font, `SLOT ${String(index + 1).padStart(2, "0")}  |  NOT USED`, 43, 1349.78 - offset, 14, MUTED);
       text(page, font, `This worksheet uses 3 of ${keepers.length} keepers. No pad or contact is assigned to this slot.`, 371, 1280.78 - offset, 12, MUTED);
@@ -304,7 +306,7 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary }) {
     drawPad(page, font, pads[index], offset);
   }
 
-  text(page, font, "Ciphertext prefixes, SHA-256 and the wallet/passphrase table are intentionally blank. Agree the exact ciphertext hash encoding before use.", 30, 42, 9.6, MUTED);
+  text(page, font, "Ciphertext prefixes, CRC32 and the wallet/passphrase table are intentionally blank. Agree the exact ciphertext checksum profile before use.", 30, 42, 9.6, MUTED);
   text(page, font, "Sensitive: retain privately and print securely. The modified worksheet does not preserve or claim the source PDF's Content Credentials.", 30, 27, 9.6, MUTED);
   if (entropySummary !== undefined) {
     // Deliberately fixed wording: never interpolate raw user-input data or

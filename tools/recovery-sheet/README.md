@@ -1,6 +1,8 @@
-# Sharekeeper recovery sheet generator
+# Sharekeeper website and recovery sheet generator
 
 A browser-only interview for 3–5 sharekeepers, local pad generation, and a downloadable private A2 worksheet based on the supplied recovery-sheet prototype. This is an unaudited prototype, not a complete SLIP-39 backup system or an approved Sharekeeper protocol implementation.
+
+The site also includes a separate public portal for the working standard, educational material, tools, and reviewed provider directory. Public portal code lives in `site/`; it is not imported into the secret generator.
 
 ## Use and build
 
@@ -13,7 +15,7 @@ npm run build
 npm run preview
 ```
 
-Open the displayed local URL. `dist/index.html` and `dist/sharekeeper-offline.html` are identical, self-contained application copies with embedded code, fonts, logo, and blank PDF background.
+The production build puts the public portal at `dist/index.html`. `dist/recovery.html` and `dist/sharekeeper-offline.html` are identical, self-contained recovery application copies with embedded code, fonts, logo, and blank PDF background. Run `npm run dev:site` to develop the portal separately; the existing `npm run dev` remains the recovery-tool development server.
 
 For private offline use, download the offline app before entering any contacts, disconnect from the network, and open that HTML file in a current browser. Generation fails closed if the required Web Crypto APIs are unavailable; do not disable browser security or substitute weaker randomness.
 
@@ -25,7 +27,7 @@ The embedded platform preview cannot reliably download a static HTML file, so it
 - **Entropy contribution:** Move a mouse or finger in the collection area. Keyboard/tap timing is an accessible alternative; the UI identifies the contribution separately from browser randomness.
 - **Review:** Confirm the contacts and two safety acknowledgments before generation. Contacts are validated for PDF fit and font support before keys are generated.
 - **Private PDF:** Each active keeper gets an 80-letter A–Z pad, arranged in 20 four-letter groups and explicitly labeled K. Inactive slots are labeled NOT USED. Repeated downloads use the same document and pads, not newly generated keys.
-- **Blank fields:** Ciphertext prefixes, ciphertext SHA-256 values, and the wallet/passphrase table remain blank. The tool never accepts or generates seed phrases, SLIP-39 shares, wallet passphrases, or ciphertext.
+- **Blank fields:** The first two expected ciphertext groups, the eight-hex-digit ciphertext CRC32 checksum, and the wallet/passphrase table remain blank. The tool never accepts or generates seed phrases, SLIP-39 shares, wallet passphrases, or ciphertext.
 
 The 3-of-N heading is a worksheet layout label. The tool does not split a secret, validate a share set, enforce custody independence, or prove a recovery quorum.
 
@@ -40,19 +42,23 @@ The UI explicitly names two inputs: the browser's cryptographic random-number ge
 
 This is computational key derivation. It does not establish information-theoretic one-time-pad security, 80 independently measured random-letter entropy, or a security-strength estimate for human gestures. Predictable movements do not replace, repair, or justify bypassing the required browser cryptographic source.
 
-## Privacy boundary
+## Recovery-tool privacy boundary
 
-There is no backend, account, analytics, service worker, cookie, local storage, session storage, or IndexedDB. Contacts, input records, and generated material remain in application memory until explicitly exported as a private PDF.
+The recovery tool has no backend, account, analytics, service worker, cookie, local storage, session storage, or IndexedDB. Contacts, input records, and generated material remain in application memory until explicitly exported as a private PDF.
 
-The production bundle has a hash-based script policy and `connect-src 'none'`. PDF generation decodes embedded assets and never fetches or uploads user material. The offline download is the pristine build artifact, not a serialization of the live form.
+The recovery production bundle has a hash-based script policy, `connect-src 'none'`, and `form-action 'none'`. PDF generation decodes embedded assets and never fetches or uploads user material. The offline download is the pristine build artifact, not a serialization of the live form.
+
+The public portal is a separate bundle. A configured private provider application form can be opened there without mounting it in the recovery workspace. No provider application or reviewer contact should enter the public directory without explicit approval and publication consent. A locally downloaded application draft is not a submission and must be labeled accordingly.
 
 Clearing a session revokes its active PDF URL, resets application state, and overwrites mutable input buffers on a best-effort basis. JavaScript strings, browser copies, cryptographic internals, downloaded files, screenshots, printers, and print queues cannot be guaranteed erased. Compromised browsers, extensions, devices, or distribution infrastructure remain outside this protection.
 
 ## Prototype profile and source preservation
 
-The generator explicitly chooses an 80-letter, 20-by-4 worksheet profile. It does not implement the draft diagram's 100-character profile or silently turn either prototype into a normative standard.
+The generator explicitly chooses an 80-letter, 20-by-4 worksheet profile. It does not turn that implementation choice or the sample into a finalized normative standard.
 
-The supplied PDF remains unchanged at `../../templates/recovery/slip39_recovery_sheet.pdf`. A derived blank background strips inherited Content Credentials and the fixed seven-day instruction at the content-stream level; the generated worksheet instead refers to the user's agreed release policy. It does not choose between the prototype sheet's release timing and the diagram's different timing.
+The newest supplied sample replaces its previous ciphertext SHA-256 field with CRC32 and eight hex cells. This generator does not implement ciphertext encryption or choose a CRC32 variant/serialization, so that field remains blank. CRC32 is not cryptographically strong and must not be presented as authentication or a digital signature ([Python zlib documentation](https://docs.python.org/3/library/zlib.html)).
+
+The supplied PDF remains unchanged at `../../templates/recovery/slip39_recovery_sheet.pdf`. A derived blank background strips inherited Content Credentials and the fixed seven-day instruction at the content-stream level; the generated worksheet instead refers to the user's agreed release policy. It does not implement or enforce a custody agreement.
 
 Asset provenance and regeneration instructions are in `assets/README.md`. The derivative PDF is a printable static worksheet, not an editable AcroForm; editable template source has not been supplied.
 

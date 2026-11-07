@@ -14,7 +14,8 @@ import "./style.css";
 const STEPS = ["Set up", "Sharekeepers", "Add entropy", "Generate sheet"];
 const PLATFORM_PREVIEW = globalThis.location?.hostname === "sites.pplx.app" ||
   (globalThis.origin === "null" && globalThis.location?.protocol !== "file:");
-const STANDALONE_URL = "https://sharekeeper.github.io/sharekeeper/";
+const SITE_URL = "https://sharekeeper.github.io/sharekeeper/";
+const STANDALONE_URL = `${SITE_URL}recovery.html`;
 const FIELD_LABELS = {
   name: "Sharekeeper name", reference: "Account / reference",
   phone: "Phone number", email: "Email address", website: "Website",
@@ -187,6 +188,11 @@ function App() {
           : <a className="quiet-link" href="./sharekeeper-offline.html" download="sharekeeper-offline.html" data-testid="download-offline">Download offline app <Download size={15} aria-hidden="true" /></a>}
       </div>
     </header>
+    <nav className="tool-site-nav" aria-label="Sharekeeper website">
+      <a href={`${SITE_URL}#/tools`} target="_blank" rel="noopener noreferrer" data-testid="link-site-tools"><ArrowLeft size={14} aria-hidden="true" /> Sharekeeper tools</a>
+      <span aria-current="page">Recovery sheet generator</span>
+      <a href={`${SITE_URL}#/providers`} target="_blank" rel="noopener noreferrer" data-testid="link-provider-directory">Provider directory <ArrowRight size={14} aria-hidden="true" /></a>
+    </nav>
     <div className="workspace">
       <aside className="workflow" aria-label="Your progress">
         <p className="eyebrow">Recovery tools</p>
@@ -201,7 +207,7 @@ function App() {
         <button className="text-button clear-button" disabled={stage === 0 || busy} onClick={() => setClearDialog(true)} data-testid="button-clear"><Trash2 size={15} aria-hidden="true" /> Clear session</button>
       </aside>
       <main id="main-content" className="main-panel">
-        <div className="panel-topline"><span>Private setup</span><span className="prototype-label">Prototype · v0.1</span></div>
+        <div className="panel-topline"><span>Private setup</span><span className="prototype-label">Prototype · CRC32 sheet</span></div>
         <section className="interview" aria-labelledby="step-heading">
           {stage === 0 && <>
             <p className="eyebrow">Step 01 / Set up</p>
@@ -253,7 +259,7 @@ function App() {
             <p className="subheading">Each sharekeeper gets its own {PAD_LENGTH}-letter pad. No keys have been generated yet.</p>
             <div className="contact-review">{activeKeepers.map((k, i) => <article key={k.id} className="review-row"><span className="row-number">{String(i + 1).padStart(2, "0")}</span><div><h3>{k.name || "Contact details missing"}</h3><p>{k.phone || k.email || k.website || k.address1 || "Add a contact channel"}</p></div><button className="text-button" disabled={busy} onClick={() => { setKeeperIndex(i); go(1); }} data-testid={`edit-keeper-${i + 1}`}>Edit</button></article>)}</div>
             <div className="mix-summary"><Fingerprint size={20} aria-hidden="true" /><div><strong>Two sources, one local generation</strong><p>Browser CSPRNG + {movement.current.length} user movement/timing samples → HKDF-SHA-256 → unbiased A–Z selection.</p></div></div>
-            <p className="technical-note">The PDF will label the filled boxes as secret pad K. Ciphertext, ciphertext hashes, and wallet passphrases stay blank; this is not a complete backup. The tool does not choose a release-delay policy.</p>
+            <p className="technical-note">The PDF will label the filled boxes as secret pad K. Ciphertext groups, the eight-digit ciphertext CRC32 checksum, and wallet passphrases stay blank; this is not a complete backup. The tool does not choose a release-delay policy.</p>
             <div className="acknowledgments">{[
               "I understand this is an unaudited prototype and will test the complete recovery process offline before relying on it.",
               "I will keep the generated PDF private. Pads must never be sent to a sharekeeper.",
@@ -270,13 +276,13 @@ function App() {
             <div className="secret-section"><button className="text-button" aria-expanded={reveal} onClick={() => setReveal(!reveal)} data-testid="toggle-pads">{reveal ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}{reveal ? "Hide pads on screen" : "Show pads on screen"}</button>
               {reveal && <div className="pad-list">{pads.map((pad, i) => <article key={i}><h3>Sharekeeper {i + 1} · Secret pad K</h3><p className="pad-text" data-testid={`pad-${i + 1}`}>{groupPad(pad)}</p></article>)}</div>}
             </div>
-            <div className="plain-note"><ShieldCheck size={20} aria-hidden="true" /><div><h3>Finish setup offline.</h3><p>Creating pads does not create or encrypt SLIP-39 shares. Complete ciphertext verification fields separately, verify the complete recovery process, and follow your agreed custody plan.</p></div></div>
+            <div className="plain-note"><ShieldCheck size={20} aria-hidden="true" /><div><h3>Finish setup offline.</h3><p>Creating pads does not create or encrypt SLIP-39 shares. Complete the expected ciphertext groups and CRC32 fields only after actual encryption, verify the complete recovery process, and follow your agreed custody plan.</p></div></div>
             <button className="secondary-button new-sheet" onClick={() => setClearDialog(true)} data-testid="button-new-sheet">Clear session and start a new sheet</button>
           </>}
           {!cryptoReady && <p className="error-message" role="alert">Web Crypto is unavailable. Use a current browser in a secure context or the downloaded offline app. Generation is blocked; there is no weaker fallback.</p>}
           {failure && <p className="error-message" role="alert" data-testid="generation-error">{failure}</p>}
         </section>
-        <details className="scope-note main-scope"><summary data-testid="toggle-scope">About this prototype and its limits</summary>{PLATFORM_PREVIEW && <p>For an offline app download, use Open standalone app. It opens a fresh GitHub Pages session; your current contacts and keys are not transferred.</p>}<p>The 80-letter profile matches this sheet’s entry layout. It does not implement the draft diagram’s 100-character profile or resolve custody policy differences. The 3-of-N label is a layout setting, not proof that shares exist.</p><p>HKDF produces computationally derived key material. This prototype does not claim information-theoretic one-time-pad security or a measured entropy contribution from gestures.</p><p>A downloaded PDF contains secret pads. Clearing this tab cannot erase downloads, print queues, screenshots, or all browser memory.</p></details>
+        <details className="scope-note main-scope"><summary data-testid="toggle-scope">About this prototype and its limits</summary>{PLATFORM_PREVIEW && <p>For an offline app download, use Open standalone app. It opens a fresh GitHub Pages session; your current contacts and keys are not transferred.</p>}<p>The 80-letter profile is an explicit choice for this generator, not a finalized Sharekeeper standard. The 3-of-N label is a layout setting, not proof that shares exist, and custody terms still need explicit agreement.</p><p>The updated sample uses an eight-hex-digit CRC32 field. A checksum is not cryptographic authentication; this generator leaves the ciphertext checksum blank.</p><p>HKDF produces computationally derived key material. This prototype does not claim information-theoretic one-time-pad security or a measured entropy contribution from gestures.</p><p>A downloaded PDF contains secret pads. Clearing this tab cannot erase downloads, print queues, screenshots, or all browser memory.</p></details>
         <footer className="panel-footer"><LockKeyhole size={14} aria-hidden="true" /><span>In-memory only. Refreshing or closing this tab loses the session.</span></footer>
       </main>
       <aside className="sheet-aside" aria-label="Your sheet profile">

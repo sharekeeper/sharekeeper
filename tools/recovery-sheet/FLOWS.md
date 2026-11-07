@@ -1,6 +1,37 @@
 # Main flows
 
-The hosted baseline was opened before these edits. It shows the supplied domain logo, the setup question, 3/4/5 keeper choices, and the fixed-threshold explanation; the application has no database or persistent user storage.
+The hosted baseline was opened before these edits. It shows the supplied domain logo, the setup question, 3/4/5 keeper choices, and the fixed-threshold explanation; the recovery application has no database or persistent user storage.
+
+## Full website and navigation
+
+- Start: Home at the existing public website address.
+- Open Standard, Learn, Tools, Providers, and the provider application page through their real navigation controls; use browser Back and a direct hash URL.
+- Expect: Distinct, accessible pages in the supplied logo's navy/cyan palette, visible working-draft status, no fabricated endorsements or providers, and mobile navigation that fits at 375 px.
+- Open the recovery tool from Tools. Expect a separate `recovery.html` document, not a network-enabled form mounted in the secret generator.
+
+## Updated source sheet
+
+- Open and download the blank sample from Home, Standard, or Tools.
+- Expect: The latest supplied PDF, preserved byte-for-byte, with FIRST 2 CIPHER GROUPS and an eight-hex-digit Expected Ciphertext CRC32 field.
+- Generate sheets for 3, 4, and 5 keepers. Expect: Correct private K-pad placement, blank ciphertext/CRC32/passphrase fields, and explicit inactive slots.
+- Expect: Educational copy distinguishes a CRC32 checksum from cryptographic authentication; the generator does not calculate a checksum of a pad and mislabel it as ciphertext.
+- The original sample's seven-day notice remains in that source. The derivative worksheet remains policy-neutral and the website explains open specification decisions.
+- The protocol-diagram PDF is removed from the current repository, build output, and all website/download links.
+
+## Provider directory and review boundary
+
+- Start: Providers.
+- Search, select service/jurisdiction filters, clear filters, and open Apply.
+- Expect: Only explicitly approved public listing data is rendered. The initial directory has no approved entries and must say so instead of displaying invented providers.
+- Expect: No private application contacts or review notes in the directory bundle or public JSON.
+
+## Provider application
+
+- Start: Apply.
+- Expect: Public listing details are separated from private reviewer contact, explicit consent is required, and no wallet/recovery secret or identity-document upload is requested.
+- If the private intake connection is not configured, expect an honest setup-needed notice and no working-looking Submit or success message. A local application draft may be reviewed/downloaded, explicitly marked not submitted.
+- Once the native private application form is connected, open the real hosted form and verify a synthetic application is durably recorded before calling intake live.
+- Directory inclusion always requires a separate human approval; an application must never automatically become a public listing.
 
 ## Select and interview keepers
 
@@ -54,4 +85,4 @@ The hosted baseline was opened before these edits. It shows the supplied domain 
 - Use the latest supplied ShareKeeper.org domain lockup unchanged, with a web-serving copy rather than a redrawn logo.
 - Carry the logo's representative navy and light cyan through headings, primary actions, selected keeper options, progress states, and entropy collection; retain white paper surfaces and dark ink.
 - Inspect setup, contacts, entropy, review, ready, and clear-dialog states on desktop and at 375 px. Check focus, selected/disabled states, contrast, header fit, and horizontal overflow.
-- Keep the recovery-sheet PDF template, pad generation, contact handling, and two-source entropy behavior unchanged.
+- Preserve the latest supplied blank sample byte-for-byte; website branding must not recolor that source PDF. Keep pad generation, contact handling, and two-source entropy behavior intact.
