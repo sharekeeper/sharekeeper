@@ -13,7 +13,7 @@ The hosted baseline was opened before these edits. It shows the supplied domain 
 
 - Open and download the blank sample from Home, Standard, or Tools.
 - Expect: The latest supplied PDF, preserved byte-for-byte, with FIRST 2 CIPHER GROUPS and an eight-hex-digit Expected Ciphertext CRC32 field.
-- For the newest uploaded revision, expect SHA-256 `fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6`, seven blank account/wallet records, and the revised, more compact keeper layout in the actual download and thumbnail.
+- For the newest uploaded revision, expect SHA-256 `fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6`, seven blank account/wallet records, and the revised, more compact keeper layout in the actual download and thumbnail. The generator's abstract sidebar miniature must also show seven wallet rows, not its older three-row placeholder.
 - Generate sheets for 3, 4, and 5 keepers. Expect: Correct private K-pad placement, blank ciphertext/CRC32/passphrase fields, and explicit inactive slots.
 - Inspect every generated keeper block against the new layout. Expect: All 80 letters remain inside the twenty four-cell groups; contact ink, prefix labels, and eight CRC32 cells do not collide; supported two-line contacts remain readable at a minimum of eight points.
 - Expect: Educational copy distinguishes a CRC32 checksum from cryptographic authentication; the generator does not calculate a checksum of a pad and mislabel it as ciphertext.
@@ -81,6 +81,18 @@ The hosted baseline was opened before these edits. It shows the supplied domain 
 - Label the small preview as a private-pad worksheet, distinct from actual SLIP-39 share generation.
 - Check the real hosted PDF and offline-copy download controls in a fresh browser context.
 - Connect the custom domain only after the GitHub Pages deployment is healthy and Namecheap access is available; preserve unrelated DNS records.
+
+## Cross-host HTTPS app navigation
+
+- Baseline: The independent HTTPS recovery document opened anonymously and completed a three-keeper interview, two-source generation, and actual PDF download before this navigation edit.
+- Start: The live recovery document on either the custom domain or the independent GitHub Pages project.
+- Open Sharekeeper tools and Provider directory. Expect: The corresponding portal routes on the same deployment, not an older GitHub alias that redirects to the still-provisioning custom domain.
+- Start: A pristine downloaded offline file or an opaque/platform preview.
+- Open the portal links or the preview's standalone-app link. Expect: The independent public HTTPS deployment with a fresh session; never copy contacts, keys, or application data into URL parameters.
+- Verify Home, Standard, Learn, Tools, Providers, and Apply at desktop and 375 px; open the separate recovery document from Tools and return through both recovery header links.
+- Verify the native application form still opens and its explicit embed remains user-initiated. Do not submit a test application without authorization or claim durable response recording was tested.
+- Verify the latest blank sample, browser favicon, pristine offline download, contact interview, pointer/timing entropy, acknowledgments, generation, reveal/hide, repeat PDF download, and clear-dialog cancel/confirm still work.
+- Inspect actual hosted HTTPS pages in a fresh anonymous browser. Require the real app heading and secure browser cryptography, not merely a public artifact wrapper or HTTP status.
 
 ## Logo-led website colors
 

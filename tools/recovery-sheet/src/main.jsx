@@ -5,6 +5,7 @@ import "@fontsource/source-sans-3/latin-400.css";
 import "@fontsource/source-sans-3/latin-600.css";
 import "@fontsource/source-sans-3/latin-700.css";
 import { blankKeeper, KEEPER_COUNTS, THRESHOLD, PAD_LENGTH } from "../shared/schema.js";
+import { publicNavigationUrls } from "../shared/public-urls.js";
 import { generatePadsWithEntropy, groupPad } from "./pads.js";
 import { createRecoveryPdf, validatePdfContacts } from "./pdf.js";
 import { contactErrors } from "./contacts.js";
@@ -12,10 +13,11 @@ import logo from "../assets/logo-with-domain.webp";
 import "./style.css";
 
 const STEPS = ["Set up", "Sharekeepers", "Add entropy", "Generate sheet"];
-const PLATFORM_PREVIEW = globalThis.location?.hostname === "sites.pplx.app" ||
-  (globalThis.origin === "null" && globalThis.location?.protocol !== "file:");
-const SITE_URL = "https://sharekeeper.github.io/sharekeeper/";
-const STANDALONE_URL = `${SITE_URL}recovery.html`;
+const {
+  platformPreview: PLATFORM_PREVIEW,
+  siteUrl: SITE_URL,
+  standaloneRecoveryUrl: STANDALONE_URL,
+} = publicNavigationUrls(globalThis.location, globalThis.origin);
 const FIELD_LABELS = {
   name: "Sharekeeper name", reference: "Account / reference",
   phone: "Phone number", email: "Email address", website: "Website",
@@ -290,7 +292,7 @@ function App() {
         <div className="paper-preview" aria-hidden="true">
           <div className="paper-title">SHAREKEEPER</div><div className="paper-subtitle">PRIVATE PAD WORKSHEET · 3 OF {count}</div><div className="paper-instructions" />
           {Array.from({ length: 5 }, (_, i) => <div className={`paper-share ${i >= count ? "unused" : ""}`} key={i}><div className="paper-share-header"><strong>SHARE {String(i + 1).padStart(2, "0")}</strong><span>{i >= count ? "NOT USED" : ""}</span></div><div className="paper-share-content"><div className="paper-contact">{i < count && keepers[i].name ? keepers[i].name : <><i /><i /><i /></>}</div><div className="paper-grid">{Array.from({ length: 20 }, (_, j) => <i key={j} />)}</div></div><div className="paper-hash" /></div>)}
-          <div className="paper-wallets"><span>ACCOUNTS / WALLET PASSPHRASES</span><i /><i /><i /></div>
+          <div className="paper-wallets"><span>ACCOUNTS / WALLET PASSPHRASES</span>{Array.from({ length: 7 }, (_, i) => <i key={i} />)}</div>
         </div>
         <p className="preview-caption">Layout preview · no secret keys shown</p>
         <dl className="document-facts"><div><dt>Sharekeepers</dt><dd>{count} independent contacts</dd></div><div><dt>Pad format</dt><dd>20 groups × 4 A–Z letters</dd></div><div><dt>Randomness</dt><dd>Browser RNG + your input</dd></div><div><dt>Output</dt><dd>One private A2 PDF</dd></div></dl>

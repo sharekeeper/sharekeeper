@@ -12,6 +12,7 @@ import logo from "../assets/logo-with-domain.webp";
 import samplePreview from "./assets/recovery-sheet-preview.webp";
 import providerData from "./providers.json";
 import intakeConfig from "./intake-config.json";
+import { publicNavigationUrls } from "../shared/public-urls.js";
 import {
   SERVICES, approvedProviders, filterProviders, hostedFormUrl,
   emptyApplication, applicationErrors,
@@ -38,9 +39,10 @@ const TITLES = {
 };
 const PROVIDERS = approvedProviders(providerData);
 const HOSTED_FORM = hostedFormUrl(intakeConfig.responderUrl);
-const PLATFORM_PREVIEW = globalThis.location?.hostname === "sites.pplx.app"
-  || (globalThis.origin === "null" && globalThis.location?.protocol !== "file:");
-const STANDALONE_RECOVERY_URL = "https://sharekeeper.github.io/sharekeeper/recovery.html";
+const {
+  platformPreview: PLATFORM_PREVIEW,
+  standaloneRecoveryUrl: STANDALONE_RECOVERY_URL,
+} = publicNavigationUrls(globalThis.location, globalThis.origin);
 
 function RouteLink({ to, children, className = "", ...props }) {
   return <a href={`#${to}`} className={className} {...props}>{children}</a>;
