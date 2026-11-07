@@ -4,12 +4,12 @@ The Sharekeeper website and recovery-sheet app are deployed from this repository
 
 ## Deployment boundaries
 
-- **Website:** The initial GitHub Pages address is [sharekeeper.github.io/sharekeeper](https://sharekeeper.github.io/sharekeeper/). The Pages API is configured with `build_type: workflow`, HTTPS enforcement enabled, and no custom domain.
+- **Website:** The canonical domain is [sharekeeper.org](https://sharekeeper.org/), served directly by this repository's GitHub Pages deployment with `build_type: workflow` and `cname: sharekeeper.org`. The original [GitHub Pages address](https://sharekeeper.github.io/sharekeeper/) is now a redirecting alias, not an independent fallback. Check certificate readiness and HTTPS enforcement using the procedure below before declaring a domain cutover complete.
 - **Published artifact:** `.github/workflows/deploy-pages.yml` uploads only `tools/recovery-sheet/dist`. It does not publish the repository root, documentation, source tree, or archived prototypes as website files.
 - **Separate documents:** The portal is `index.html`; the secret generator is `recovery.html`; `sharekeeper-offline.html` is an identical pristine generator copy. The portal and recovery scripts have separate CSPs. Provider intake must never be imported into the secret generator.
 - **Browser-only recovery:** Secret generation and PDF creation run in the browser, without application backends or build-time secrets. Do not add private account details, credentials, recovery material, private provider applications, or production secrets to this repository or deployment configuration.
 - **Approved directory only:** Public directory data must contain only approved, explicitly publishable business fields. Keep private intake responses in the private review service, not GitHub Issues or source files. Do not claim application success if only a local draft was created or an intake destination is unconfigured.
-- **Path compatibility:** The app's Vite configuration uses `base: "./"` so the built website supports both the project subpath and a future custom domain.
+- **Path compatibility:** The app's Vite configuration uses `base: "./"` so the built website supports both the original project subpath and the custom-domain root.
 
 ## Build and release
 
@@ -50,12 +50,23 @@ gh api repos/sharekeeper/sharekeeper/pages \
   --jq '{status,html_url,build_type,cname,https_enforced}'
 ```
 
-## Custom domain follow-up
+## Production domain and HTTPS
 
-The intended domain is `sharekeeper.org`, but no custom domain or Namecheap DNS records were changed during initial setup. Domain access and verification remain a separate step; the default GitHub Pages deployment does not depend on them.
+On November 7, 2026, the owner authorized replacing Namecheap URL forwarding with direct GitHub Pages hosting. The Pages custom domain was attached before the DNS records were saved. Namecheap remains the registrar and DNS provider; no nameserver, registrant, or email-service change was made.
 
-- **Verify ownership first:** Retrieve the organization-specific verification record from GitHub and add that exact TXT value in Namecheap. Do not invent or reuse a verification token.
-- **Configure the site:** After ownership verification and authorized DNS access, attach the domain to this Pages site and add the DNS records GitHub specifies. Decide whether `www` should redirect to the apex before changing records.
-- **Validate before completion:** Confirm DNS propagation, the Pages custom-domain health check, the HTTPS certificate, and the final canonical URL. Keep HTTPS enforced after the certificate is issued.
+The website host records are the following [GitHub-recommended records](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site):
 
-Consult the official [custom domain configuration guide](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site) and [domain verification guide](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/verifying-your-custom-domain-for-github-pages) when performing that follow-up.
+| Type | Host | Value |
+| --- | --- | --- |
+| A | `@` | `185.199.108.153` |
+| A | `@` | `185.199.109.153` |
+| A | `@` | `185.199.110.153` |
+| A | `@` | `185.199.111.153` |
+| CNAME | `www` | `sharekeeper.github.io.` |
+
+Both previous URL Redirect records were replaced, not retained alongside these records. The existing Namecheap Email Forwarding selection and SPF TXT record (`v=spf1 include:spf.efwd.registrar-servers.com ~all`) were left intact. GitHub handles the `www` redirect to the apex; no wildcard DNS record is needed.
+
+- **Certificate gate:** GitHub manages the custom-domain certificate. During initial issuance, the Pages API can show `https_certificate: null` and `https_enforced: false`; this is not a completed secure launch. Confirm a ready certificate, a normal anonymous HTTPS load, and the current sample PDF before enabling HTTPS enforcement and reporting completion, following the [GitHub Pages HTTPS guidance](https://docs.github.com/en/pages/getting-started-with-github-pages/securing-your-github-pages-site-with-https).
+- **Workflow behavior:** Custom GitHub Actions deployments do not require a `CNAME` file; GitHub ignores that file for this publishing method. Preserve the Pages API's custom-domain configuration across future releases, as documented in [GitHub's custom-domain guide](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site).
+- **Ownership hardening:** GitHub Pages organization-level TXT verification is recommended but has not been completed. Retrieve the exact Pages-specific challenge from the organization's Pages settings when arranging that hardening; never invent a token or substitute a generic organization-identity verification token. Verification reduces domain-takeover risk, as described in the [domain verification guide](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/verifying-your-custom-domain-for-github-pages).
+- **Perplexity independence:** The production domain no longer forwards to `sharekeeper.pplx.app`. Making the Perplexity library artifact public did not clear that published site's separate access gate, so its visibility must not be treated as evidence that the production domain works or fails.
