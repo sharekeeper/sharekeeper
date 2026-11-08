@@ -237,10 +237,13 @@ test("every n-of-m choice changes only the header digits and title", async () =>
     }
   }
   for (const threshold of [0, 1, 6, 2.5, "3"]) {
-    await assert.rejects(createRecoveryPdf({ ...fixture(5), threshold }), /threshold must be a whole number from 2 to 5/);
+    await assert.rejects(createRecoveryPdf({ ...fixture(5), threshold }), /threshold must be one of 2, 3, 4, 5 for 5/);
   }
-  await assert.rejects(createRecoveryPdf({ ...fixture(3), threshold: 4 }), /from 2 to 3/);
-  assert.deepEqual(thresholdOptions(2), [2]);
+  await assert.rejects(createRecoveryPdf({ ...fixture(3), threshold: 4 }), /one of 2, 3 for 3/);
+  await assert.rejects(createRecoveryPdf({ ...fixture(3), threshold: 1 }), /one of 2, 3 for 3/);
+  await assert.rejects(createRecoveryPdf({ ...fixture(2), threshold: 0 }), /one of 1, 2 for 2/);
+  assert.deepEqual(thresholdOptions(2), [1, 2]);
+  assert.deepEqual(thresholdOptions(3), [2, 3]);
   assert.deepEqual(thresholdOptions(5), [2, 3, 4, 5]);
 });
 

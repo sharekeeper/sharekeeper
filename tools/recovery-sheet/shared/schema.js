@@ -10,12 +10,17 @@ export const KEEPER_COUNTS = [2, 3, 4, 5];
 export function thresholdFor(count) {
   return Math.min(THRESHOLD, count);
 }
-/** Thresholds a user can choose for m sharekeepers: 2 to m (SLIP-39 needs at least 2 when m > 1). */
+/**
+ * Thresholds a user can choose for m sharekeepers: n = m − 1 is always offered,
+ * and otherwise 2 to m. So 2 sharekeepers allow 1 of 2 and 2 of 2; 3 to 5 allow
+ * 2 to m. (SLIP-39 encodes 1 of 2 as two one-share groups, group threshold 1.)
+ */
 export function thresholdOptions(count) {
-  return Array.from({ length: Math.max(0, count - 1) }, (_, index) => index + 2);
+  if (!Number.isInteger(count) || count < 2) return [];
+  return Array.from({ length: count }, (_, index) => index + 1).filter((n) => n >= 2 || n === count - 1);
 }
 export function isValidThreshold(threshold, count) {
-  return Number.isInteger(threshold) && threshold >= 2 && threshold <= count;
+  return thresholdOptions(count).includes(threshold);
 }
 
 export function blankKeeper(id) {

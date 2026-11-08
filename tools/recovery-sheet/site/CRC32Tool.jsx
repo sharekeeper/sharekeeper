@@ -116,7 +116,7 @@ export default function CRC32Tool() {
         <p>The check value for <code>123456789</code> is <code>CBF43926</code>. This is an explicit calculator profile, not a finalized Sharekeeper ciphertext format; agree on the exact bytes before comparing checksums.</p>
         <a href="https://docs.python.org/3/library/zlib.html#zlib.crc32" target="_blank" rel="noreferrer">About CRC32 and its limits</a>
       </details>
-      <p className="small crc-profile-note">Separate from pad generation. This calculator does not fill the recovery sheet’s CRC32 boxes or change its open serialization decisions.</p>
+      <p className="small crc-profile-note">Separate from pad generation and does not fill the sheet. To check a ciphertext CRC32 from the offline Shamir tool, paste its 80 ciphertext letters as uppercase text with no spaces.</p>
       </div>
     </div>
     <form className="crc-calculator" onSubmit={calculate} noValidate aria-label="CRC32 calculator">

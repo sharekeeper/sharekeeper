@@ -4,7 +4,7 @@ import {
 } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { FONT_BASE64, TEMPLATE_BASE64 } from "./pdf-assets.js";
-import { isValidThreshold, KEEPER_COUNTS, PAD_LENGTH, thresholdFor } from "../shared/schema.js";
+import { isValidThreshold, KEEPER_COUNTS, PAD_LENGTH, thresholdFor, thresholdOptions } from "../shared/schema.js";
 
 // The bundled template is the supplied sample PDF, byte for byte. Its page is
 // reproduced unchanged; the generator only writes values into blank fields.
@@ -51,6 +51,12 @@ export const PDF_CONTACT_FRAME = Object.freeze({
 // groups 78.8551pt apart; first cell bottom-left at (371, 1294.78).
 export const PAD_CELL = Object.freeze({ x: 371, y: 1294.78, width: 16, height: 26, groupPitch: 78.8551, rowPitch: 46 });
 export const PAD_LETTER_SIZE = 15;
+// FIRST 2 CIPHER GROUPS: two groups of four 14.2 x 26pt cells at x=201 and 269.
+export const PREFIX_CELL = Object.freeze({ xs: [201, 269], y: 1186.78, width: 14.2, height: 26 });
+export const PREFIX_LETTER_SIZE = 13;
+// Expected Ciphertext CRC32: eight 20 x 20pt cells from x=575.4121.
+export const CRC_CELL = Object.freeze({ x: 575.4121, y: 1207.78, width: 20, height: 20 });
+export const CRC_DIGIT_SIZE = 13;
 let glyphMetricFont;
 
 function decodeBase64(base64) {
@@ -259,6 +265,30 @@ function drawContacts(page, font, rows, offset) {
   }
 }
 
+function drawCentered(page, font, character, cellX, cellY, width, height, size) {
+  const capHeight = measurePdfGlyphBounds("H", size).maxY;
+  page.drawText(character, {
+    x: cellX + (width - font.widthOfTextAtSize(character, size)) / 2,
+    y: cellY + (height - capHeight) / 2,
+    size,
+    font,
+    color: INK,
+  });
+}
+
+function drawCipherGroups(page, font, groups, offset) {
+  for (let index = 0; index < 8; index += 1) {
+    const cellX = PREFIX_CELL.xs[Math.floor(index / 4)] + (index % 4) * PREFIX_CELL.width;
+    drawCentered(page, font, groups[index], cellX, PREFIX_CELL.y - offset, PREFIX_CELL.width, PREFIX_CELL.height, PREFIX_LETTER_SIZE);
+  }
+}
+
+function drawCrc(page, font, crc, offset) {
+  for (let index = 0; index < 8; index += 1) {
+    drawCentered(page, font, crc[index], CRC_CELL.x + index * CRC_CELL.width, CRC_CELL.y - offset, CRC_CELL.width, CRC_CELL.height, CRC_DIGIT_SIZE);
+  }
+}
+
 function drawPad(page, font, pad, offset) {
   const capHeight = measurePdfGlyphBounds("H", PAD_LETTER_SIZE).maxY;
   for (let index = 0; index < PAD_LENGTH; index += 1) {
@@ -282,11 +312,11 @@ function drawPad(page, font, pad, offset) {
  * into its blank fields. Contacts and pads are never fetched, persisted,
  * logged, or uploaded. Ciphertext prefixes, CRC32 and wallet rows stay blank.
  */
-export async function createRecoveryPdf({ keepers, pads, entropySummary, threshold }) {
+export async function createRecoveryPdf({ keepers, pads, entropySummary, threshold, cipherGroups, ciphertextCrcs }) {
   requireKeepers(keepers);
   threshold ??= thresholdFor(keepers.length);
   if (!isValidThreshold(threshold, keepers.length)) {
-    throw new Error(`Recovery threshold must be a whole number from 2 to ${keepers.length}.`);
+    throw new Error(`Recovery threshold must be one of ${thresholdOptions(keepers.length).join(", ")} for ${keepers.length} sharekeepers.`);
   }
   if (!Array.isArray(pads) || pads.length !== keepers.length ||
       pads.some((pad) => typeof pad !== "string" || !/^[A-Z]{80}$/.test(pad))) {
@@ -296,6 +326,17 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary, thresho
       (!entropySummary || !Number.isSafeInteger(entropySummary.sampleCount) ||
        entropySummary.sampleCount < 1 || typeof entropySummary.inputKind !== "string")) {
     throw new Error("PDF entropy summary must contain a positive sampleCount and inputKind text, never raw entropy data.");
+  }
+  // Optional, offline Shamir tool only: first two cipher groups and ciphertext CRC32 per keeper.
+  if ((cipherGroups === undefined) !== (ciphertextCrcs === undefined)) {
+    throw new Error("Cipher groups and ciphertext CRC32 values must be supplied together.");
+  }
+  if (cipherGroups !== undefined && (
+    !Array.isArray(cipherGroups) || cipherGroups.length !== keepers.length ||
+    cipherGroups.some((value) => typeof value !== "string" || !/^[A-Z]{8}$/.test(value)) ||
+    !Array.isArray(ciphertextCrcs) || ciphertextCrcs.length !== keepers.length ||
+    ciphertextCrcs.some((value) => typeof value !== "string" || !/^[0-9A-F]{8}$/.test(value)))) {
+    throw new Error("Each keeper needs 8 cipher-group letters (A–Z) and an 8-digit uppercase hex CRC32.");
   }
   const { document, font } = await documentAndFont();
   const { errors, layouts } = validateAndLayout(keepers, font);
@@ -321,6 +362,10 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary, thresho
     const offset = index * KEEPER_STRIDE;
     drawContacts(page, font, layouts[index], offset);
     drawPad(page, font, pads[index], offset);
+    if (cipherGroups) {
+      drawCipherGroups(page, font, cipherGroups[index], offset);
+      drawCrc(page, font, ciphertextCrcs[index], offset);
+    }
   });
   page.pushOperators(popGraphicsState());
   return document.save({ useObjectStreams: true });

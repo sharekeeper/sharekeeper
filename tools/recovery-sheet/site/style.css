@@ -567,3 +567,9 @@ dd { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+.shamir-tool { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: var(--space-4) var(--space-10); margin-block: 0 var(--space-24); padding: var(--space-10); border: 1px solid var(--field-border); background: var(--white); }
+.shamir-tool .tool-facts { margin: 0; }
+.shamir-tool h2 { margin-block: var(--space-3); }
+.shamir-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-6); align-items: center; }
+.shamir-actions .small { flex: 1 1 22rem; margin: 0; }
+@media (max-width: 900px) { .shamir-tool { grid-template-columns: 1fr; padding: var(--space-6) var(--space-5); margin-block-end: var(--space-16); } }
