@@ -16,7 +16,7 @@ import {
   TEMPLATE_CONTACT_ROWS,
   validatePdfContacts,
 } from "../src/pdf.js";
-import { blankKeeper, thresholdFor } from "../shared/schema.js";
+import { blankKeeper, thresholdFor, thresholdOptions } from "../shared/schema.js";
 
 // Deliberately obvious, deterministic fixtures; never real keeper/pad material.
 function fixture(count = 3) {
@@ -224,6 +224,24 @@ test("long contacts fail before export rather than silently truncating", async (
   const errors = await validatePdfContacts(input.keepers);
   assert.ok(errors.some((error) => error.field === "region" && /nothing was truncated/.test(error.message)));
   await assert.rejects(createRecoveryPdf(input), /too long/);
+});
+
+test("every n-of-m choice changes only the header digits and title", async () => {
+  const original = await sourceStream();
+  for (const count of [2, 3, 4, 5]) {
+    for (const threshold of thresholdOptions(count)) {
+      const document = await PDFDocument.load(await createRecoveryPdf({ ...fixture(count), threshold }));
+      assert.equal(document.getTitle(), `Sharekeeper SLIP-39 recovery sheet: ${threshold} of ${count}`);
+      const [stream] = sheetStreams(document, document.getPages()[0].node.Resources());
+      assert.equal(stream, original.replace("(3 OF 5  |", `(${threshold} OF ${count}  |`));
+    }
+  }
+  for (const threshold of [0, 1, 6, 2.5, "3"]) {
+    await assert.rejects(createRecoveryPdf({ ...fixture(5), threshold }), /threshold must be a whole number from 2 to 5/);
+  }
+  await assert.rejects(createRecoveryPdf({ ...fixture(3), threshold: 4 }), /from 2 to 3/);
+  assert.deepEqual(thresholdOptions(2), [2]);
+  assert.deepEqual(thresholdOptions(5), [2, 3, 4, 5]);
 });
 
 test("rejects invalid keeper counts and malformed or mismatched pads", async () => {

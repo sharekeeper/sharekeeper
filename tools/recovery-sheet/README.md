@@ -23,13 +23,13 @@ The embedded platform preview cannot reliably download a static HTML file, so it
 
 ## Interview and output
 
-- **Keepers:** Select 2, 3, 4, or 5 and enter a name plus at least one contact channel for each. Account references, postal addresses, additional channels, and other optional fields are never invented.
+- **Keepers:** Select 2, 3, 4, or 5 sharekeepers (m) and how many are needed to recover (n, from 2 to m), then enter a name plus at least one contact channel for each. Account references, postal addresses, additional channels, and other optional fields are never invented.
 - **Entropy contribution:** Move a mouse or finger in the collection area. Keyboard/tap timing is an accessible alternative; the UI identifies the contribution separately from browser randomness.
 - **Review:** Confirm the contacts and two safety acknowledgments before generation. Contacts are validated for PDF fit and font support before keys are generated.
 - **Private PDF:** Each active keeper gets an 80-letter A–Z pad, arranged in 20 four-letter groups and explicitly labeled K. Inactive slots are labeled NOT USED. Repeated downloads use the same document and pads, not newly generated keys.
 - **Blank fields:** The first two expected ciphertext groups, the eight-hex-digit ciphertext CRC32 checksum, and the wallet/passphrase table remain blank. The tool never accepts or generates seed phrases, SLIP-39 shares, wallet passphrases, or ciphertext.
 
-The threshold-of-N heading is a worksheet layout label: 3 of N for 3–5 sharekeepers, 2 of 2 for two (both required; losing either makes recovery impossible). The tool does not split a secret, validate a share set, enforce custody independence, or prove a recovery quorum.
+The sheet header shows the chosen "n OF m" (default 3 of 5); only those two digits of the template change. With n = m, losing any one sharekeeper makes recovery impossible. It is a worksheet label; the tool does not split a secret, validate a share set, enforce custody independence, or prove a recovery quorum.
 
 ## Two input sources and their limits
 
@@ -78,7 +78,7 @@ The generator explicitly chooses an 80-letter, 20-by-4 worksheet profile. It doe
 
 The newest supplied sample replaces its previous ciphertext SHA-256 field with CRC32 and eight hex cells. This generator does not implement ciphertext encryption or choose a CRC32 variant/serialization, so that field remains blank. CRC32 is not cryptographically strong and must not be presented as authentication or a digital signature ([Python zlib documentation](https://docs.python.org/3/library/zlib.html)).
 
-The supplied PDF at `../../templates/recovery/slip39_recovery_sheet.pdf` is bundled byte for byte, and the generated sheet must match it precisely: its page content stream is reproduced unchanged and the generator only writes contacts into the seven template contact lines and pad letters into the 80 pad cells of each used share. For 2-of-2, 3-of-3 and 3-of-4 sheets only the threshold and share-count digits in the header change; unused share sections remain blank. Contacts are single lines fitted from 11pt down to 7pt on each line; values that do not fit are rejected, never truncated. There is no email line on the template, so the generator does not collect email. Copying only the page leaves out the source's Content Credentials, which do not attest to a filled-in sheet. It does not implement or enforce a custody agreement.
+The supplied PDF at `../../templates/recovery/slip39_recovery_sheet.pdf` is bundled byte for byte, and the generated sheet must match it precisely: its page content stream is reproduced unchanged and the generator only writes contacts into the seven template contact lines and pad letters into the 80 pad cells of each used share. For any sheet other than 3 of 5, only the threshold and share-count digits in the header change (to the chosen n OF m); unused share sections remain blank. Contacts are single lines fitted from 11pt down to 7pt on each line; values that do not fit are rejected, never truncated. There is no email line on the template, so the generator does not collect email. Copying only the page leaves out the source's Content Credentials, which do not attest to a filled-in sheet. It does not implement or enforce a custody agreement.
 
 The latest source revision has more compact keeper sections, no authentication/notice or release-due header fields, and seven account/wallet rows. Its new recovery instructions are retained as supplied in the source and generated sheet, including the incomplete wording at the end of step 6. They remain prototype material requiring procedural review; this tool does not enter data into a hardware wallet, sign or broadcast transactions, destroy paper, or wipe a device.
 

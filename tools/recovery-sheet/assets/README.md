@@ -26,8 +26,8 @@ Values are written on the template's own geometry: the seven contact rules per
 share (14.5-point pitch, ending at x=335; values fitted on one line from 11pt
 down to 7pt) and the twenty four-cell pad groups (letters at 15pt, centred).
 Ciphertext prefixes, CRC32 cells and wallet rows stay blank, and the generator
-never computes a checksum of a pad. For 2-of-2, 3-of-3 and 3-of-4 sheets the only change to the template
-stream is the threshold and share-count digits in the header literal.
+never computes a checksum of a pad. For any sheet other than 3 of 5 the only change to the template stream
+is the chosen n OF m digits in the header literal.
 
 DejaVu Sans is embedded with subsetting in each PDF. Its license is included as
 `DejaVuSans-LICENSE.txt`. Latin accents, Greek, Cyrillic, and other characters in

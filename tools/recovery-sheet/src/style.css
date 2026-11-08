@@ -54,6 +54,8 @@ h2[tabindex="-1"]:focus { outline: none; }
 .skip-link:focus { clip-path: none; width: auto; height: auto; overflow: visible; padding: var(--space-3); }
 .site-header { height: 94px; padding: 0 var(--space-10); display: flex; align-items: center; justify-content: space-between; background: var(--color-surface); border-bottom: 3px solid var(--color-accent); }
 .brand { width: 280px; height: 90px; object-fit: contain; }
+.brand-link { display: inline-flex; flex-shrink: 0; border-radius: var(--radius-md); }
+.brand-link:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 4px; }
 .header-actions { display: flex; align-items: center; gap: var(--space-8); font-size: var(--text-sm); }
 .tool-site-nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-6); padding: var(--space-3) var(--space-10); background: var(--color-surface); border-bottom: 1px solid var(--color-border); font-size: var(--text-sm); }
 .tool-site-nav a { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--color-primary); min-height: 32px; font-weight: 600; }

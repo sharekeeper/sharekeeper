@@ -4,7 +4,7 @@ import {
 } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { FONT_BASE64, TEMPLATE_BASE64 } from "./pdf-assets.js";
-import { KEEPER_COUNTS, PAD_LENGTH, thresholdFor } from "../shared/schema.js";
+import { isValidThreshold, KEEPER_COUNTS, PAD_LENGTH, thresholdFor } from "../shared/schema.js";
 
 // The bundled template is the supplied sample PDF, byte for byte. Its page is
 // reproduced unchanged; the generator only writes values into blank fields.
@@ -234,15 +234,15 @@ export function locateTemplateSheet(template) {
 }
 
 /**
- * Load the untouched template. For 2-of-2, 3-of-3 and 3-of-4 sheets only the
+ * Load the untouched template. For any sheet other than 3 of 5 only the
  * threshold and share-count digits in the header literal change, in the template's own font.
  */
-async function templatePage(count) {
+async function templatePage(count, threshold) {
   const template = await PDFDocument.load(decodeBase64(TEMPLATE_BASE64), { updateMetadata: false });
   const sheet = locateTemplateSheet(template);
-  if (count !== 5) {
+  if (count !== 5 || threshold !== 3) {
     if (sheet.text.split(HEADER_LITERAL).length - 1 !== 1) throw new Error("Template header changed; review before export.");
-    const updated = sheet.text.replace(HEADER_LITERAL, `(${thresholdFor(count)} OF ${count}  |`);
+    const updated = sheet.text.replace(HEADER_LITERAL, `(${threshold} OF ${count}  |`);
     const fresh = template.context.flateStream(Uint8Array.from(updated, (character) => character.charCodeAt(0)));
     for (const [key, value] of sheet.stream.dict.entries()) {
       if (!["/Filter", "/Length", "/DecodeParms"].includes(key.toString())) fresh.dict.set(key, value);
@@ -282,8 +282,12 @@ function drawPad(page, font, pad, offset) {
  * into its blank fields. Contacts and pads are never fetched, persisted,
  * logged, or uploaded. Ciphertext prefixes, CRC32 and wallet rows stay blank.
  */
-export async function createRecoveryPdf({ keepers, pads, entropySummary }) {
+export async function createRecoveryPdf({ keepers, pads, entropySummary, threshold }) {
   requireKeepers(keepers);
+  threshold ??= thresholdFor(keepers.length);
+  if (!isValidThreshold(threshold, keepers.length)) {
+    throw new Error(`Recovery threshold must be a whole number from 2 to ${keepers.length}.`);
+  }
   if (!Array.isArray(pads) || pads.length !== keepers.length ||
       pads.some((pad) => typeof pad !== "string" || !/^[A-Z]{80}$/.test(pad))) {
     throw new Error("PDF export requires one exact 80-letter uppercase A–Z pad per keeper.");
@@ -301,10 +305,10 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary }) {
     throw error;
   }
 
-  const { template, matrix } = await templatePage(keepers.length);
+  const { template, matrix } = await templatePage(keepers.length, threshold);
   const [page] = await document.copyPages(template, [0]);
   document.addPage(page);
-  document.setTitle(`Sharekeeper SLIP-39 recovery sheet: ${thresholdFor(keepers.length)} of ${keepers.length}`);
+  document.setTitle(`Sharekeeper SLIP-39 recovery sheet: ${threshold} of ${keepers.length}`);
   document.setSubject(entropySummary === undefined
     ? "Private recovery sheet with 80-letter pads. Unaudited prototype."
     : "Private recovery sheet with 80-letter pads (1600-bit browser seed per pad XOR 1600-bit user-input block). Unaudited prototype.");

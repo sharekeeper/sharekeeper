@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Check, CheckCircle2, Download, Fingerprint, Lock
 import "@fontsource/source-sans-3/latin-400.css";
 import "@fontsource/source-sans-3/latin-600.css";
 import "@fontsource/source-sans-3/latin-700.css";
-import { blankKeeper, KEEPER_COUNTS, PAD_LENGTH, thresholdFor } from "../shared/schema.js";
+import { blankKeeper, KEEPER_COUNTS, PAD_LENGTH, thresholdOptions } from "../shared/schema.js";
 import { publicNavigationUrls } from "../shared/public-urls.js";
 import { BROWSER_SEED_BITS, generatePadsWithEntropy, groupPad } from "./pads.js";
 import { createEntropyCollector, USER_ENTROPY_TARGET_BITS } from "./entropy.js";
@@ -28,6 +28,7 @@ const FIELD_LABELS = {
 function App() {
   const [stage, setStage] = useState(0);
   const [count, setCount] = useState(5);
+  const [threshold, setThreshold] = useState(3);
   const [keepers, setKeepers] = useState(() => Array.from({ length: 5 }, (_, i) => blankKeeper(i + 1)));
   const [keeperIndex, setKeeperIndex] = useState(0);
   const [errors, setErrors] = useState({});
@@ -132,7 +133,7 @@ function App() {
     setBusy(false);
     setPads([]); setPdfUrl(""); setReveal(false);
     setKeepers(Array.from({ length: 5 }, (_, i) => blankKeeper(i + 1)));
-    setCount(5); setKeeperIndex(0); setAcknowledgments([false, false]);
+    setCount(5); setThreshold(3); setKeeperIndex(0); setAcknowledgments([false, false]);
     resetMovement(); setKeyboardMode(false); setClearDialog(false); go(0);
   }
 
@@ -150,7 +151,7 @@ function App() {
       contribution = movement.current.encode();
       const newPads = await generatePadsWithEntropy(count, contribution);
       const bytes = await createRecoveryPdf({
-        keepers: activeKeepers, pads: newPads,
+        keepers: activeKeepers, pads: newPads, threshold,
         entropySummary: { sampleCount: movement.current.count, inputKind },
       });
       if (version !== generationVersion.current) return;
@@ -183,7 +184,7 @@ function App() {
   return <>
     <a href="#main-content" className="skip-link">Skip to content</a>
     <header className="site-header">
-      <img src={logo} alt="ShareKeeper.org" width="280" height="93" className="brand" data-testid="img-brand" onError={(e) => { e.currentTarget.hidden = true; }} />
+      <a href={`${SITE_URL}#/`} target="_blank" rel="noopener noreferrer" className="brand-link" aria-label="ShareKeeper.org home (opens in a new tab, keeping this workspace)" data-testid="link-home"><img src={logo} alt="" width="280" height="93" className="brand" data-testid="img-brand" onError={(e) => { e.currentTarget.hidden = true; }} /></a>
       <div className="header-actions">
         <span className="local-label"><LockKeyhole size={15} aria-hidden="true" /> Browser-only workspace</span>
         {PLATFORM_PREVIEW
@@ -214,15 +215,20 @@ function App() {
         <section className="interview" aria-labelledby="step-heading">
           {stage === 0 && <>
             <p className="eyebrow">Step 01 / Set up</p>
-            <h2 id="step-heading" tabIndex="-1" ref={headingRef}>How many sharekeepers will you use?</h2>
-            <p className="subheading">Choose 2–5 independent sharekeepers. We’ll guide you through their contact details, then generate a separate pad for each.</p>
+            <h2 id="step-heading" tabIndex="-1" ref={headingRef}>How many sharekeepers, and how many to recover?</h2>
+            <p className="subheading">Choose 2–5 independent sharekeepers (m) and how many of them are needed to recover (n). We’ll guide you through their contact details, then generate a separate pad for each.</p>
             <fieldset className="count-fieldset"><legend>Number of sharekeepers</legend><div className="count-options">
-              {KEEPER_COUNTS.map((n) => <button key={n} type="button" aria-pressed={count === n} className={count === n ? "count-option selected" : "count-option"} onClick={() => setCount(n)} data-testid={`count-${n}`}>
+              {KEEPER_COUNTS.map((n) => <button key={n} type="button" aria-pressed={count === n} className={count === n ? "count-option selected" : "count-option"} onClick={() => { setCount(n); setThreshold((t) => Math.min(Math.max(t, 2), n)); }} data-testid={`count-${n}`}>
                 <span className="count-value">{n}</span><span>sharekeepers</span><span className="count-detail">One pad per keeper</span>{count === n && <CheckCircle2 size={18} aria-hidden="true" />}
               </button>)}
             </div></fieldset>
-            <p className="technical-note">The worksheet uses a recovery threshold of 3 for 3–5 sharekeepers, and 2 of 2 when you choose 2: both sharekeepers are then needed, and losing either one makes recovery impossible. It prepares pad and contact fields, not the shares themselves.</p>
-            <div className="profile-row"><span><strong>{thresholdFor(count)}-of-{count}</strong> sheet layout</span><span><strong>{PAD_LENGTH} letters</strong> per pad</span><span><strong>US Letter</strong> printable PDF</span></div>
+            <fieldset className="count-fieldset threshold-fieldset"><legend>Sharekeepers needed to recover</legend><div className="count-options">
+              {thresholdOptions(count).map((n) => <button key={n} type="button" aria-pressed={threshold === n} className={threshold === n ? "count-option selected" : "count-option"} onClick={() => setThreshold(n)} data-testid={`threshold-${n}`}>
+                <span className="count-value">{n} of {count}</span><span>needed</span><span className="count-detail">{count - n === 0 ? "No spare: lose one, lose all" : `${count - n} can be lost`}</span>{threshold === n && <CheckCircle2 size={18} aria-hidden="true" />}
+              </button>)}
+            </div></fieldset>
+            <p className="technical-note">Any {threshold} of your {count} sharekeepers can recover; up to {count - threshold} can be lost or refuse. {threshold === count ? "With n equal to m, losing any single sharekeeper makes recovery impossible. " : ""}A threshold of 1 is not offered, since SLIP-39 requires at least 2 when there is more than one share. The sheet records the choice; it prepares pad and contact fields, not the shares themselves.</p>
+            <div className="profile-row"><span><strong>{threshold}-of-{count}</strong> sheet layout</span><span><strong>{PAD_LENGTH} letters</strong> per pad</span><span><strong>US Letter</strong> printable PDF</span></div>
             <div className="plain-note"><LockKeyhole size={19} aria-hidden="true" /><div><h3>Keep wallet secrets out of this tool.</h3><p>We never ask for a seed phrase, share, or wallet passphrase. This prototype creates pads and a contact sheet, not SLIP-39 shares.</p></div></div>
             <div className="actions"><button className="primary-button" onClick={() => go(1)} disabled={!cryptoReady} data-testid="button-start">Continue to contacts <ArrowRight size={17} aria-hidden="true" /></button></div>
           </>}
@@ -291,12 +297,12 @@ function App() {
       <aside className="sheet-aside" aria-label="Your sheet profile">
         <p className="eyebrow">The document</p>
         <div className="paper-preview" aria-hidden="true">
-          <div className="paper-title">SHAREKEEPER</div><div className="paper-subtitle">PRIVATE PAD WORKSHEET · {thresholdFor(count)} OF {count}</div><div className="paper-instructions" />
+          <div className="paper-title">SHAREKEEPER</div><div className="paper-subtitle">PRIVATE PAD WORKSHEET · {threshold} OF {count}</div><div className="paper-instructions" />
           {Array.from({ length: 5 }, (_, i) => <div className={`paper-share ${i >= count ? "unused" : ""}`} key={i}><div className="paper-share-header"><strong>SHARE {String(i + 1).padStart(2, "0")}</strong><span>{i >= count ? "LEFT BLANK" : ""}</span></div><div className="paper-share-content"><div className="paper-contact">{i < count && keepers[i].name ? keepers[i].name : <><i /><i /><i /></>}</div><div className="paper-grid">{Array.from({ length: 20 }, (_, j) => <i key={j} />)}</div></div><div className="paper-hash" /></div>)}
           <div className="paper-wallets"><span>ACCOUNTS / WALLET PASSPHRASES</span>{Array.from({ length: 7 }, (_, i) => <i key={i} />)}</div>
         </div>
         <p className="preview-caption">Layout preview · no secret keys shown</p>
-        <dl className="document-facts"><div><dt>Sharekeepers</dt><dd>{count} independent contacts</dd></div><div><dt>Pad format</dt><dd>20 groups × 4 A–Z letters</dd></div><div><dt>Randomness</dt><dd>Browser RNG + your input</dd></div><div><dt>Output</dt><dd>One private US Letter PDF</dd></div></dl>
+        <dl className="document-facts"><div><dt>Sharekeepers</dt><dd>{count} independent contacts</dd></div><div><dt>Recovery</dt><dd>Any {threshold} of {count}</dd></div><div><dt>Pad format</dt><dd>20 groups × 4 A–Z letters</dd></div><div><dt>Randomness</dt><dd>Browser RNG + your input</dd></div><div><dt>Output</dt><dd>One private US Letter PDF</dd></div></dl>
       </aside>
     </div>
     <dialog ref={dialogRef} onCancel={(e) => { e.preventDefault(); setClearDialog(false); }} className="clear-dialog" aria-labelledby="clear-heading">
