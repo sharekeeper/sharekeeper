@@ -292,7 +292,7 @@ test("PDF generation never uses fetch", async () => {
 test("optional entropy provenance contains no raw input or bit rating", async () => {
   const bytes = await createRecoveryPdf({ ...fixture(), entropySummary: { sampleCount: 100, inputKind: "pointer" } });
   const document = await PDFDocument.load(bytes);
-  assert.doesNotMatch(document.getSubject(), /100|pointer|bits?/);
+  assert.doesNotMatch(document.getSubject(), /pointer|\b100\b|samples/);
   await assert.rejects(createRecoveryPdf({
     ...fixture(),
     entropySummary: { sampleCount: -1, inputKind: "pointer" },

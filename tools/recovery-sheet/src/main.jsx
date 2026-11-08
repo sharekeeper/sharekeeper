@@ -6,7 +6,8 @@ import "@fontsource/source-sans-3/latin-600.css";
 import "@fontsource/source-sans-3/latin-700.css";
 import { blankKeeper, KEEPER_COUNTS, THRESHOLD, PAD_LENGTH } from "../shared/schema.js";
 import { publicNavigationUrls } from "../shared/public-urls.js";
-import { generatePadsWithEntropy, groupPad } from "./pads.js";
+import { BROWSER_SEED_BITS, generatePadsWithEntropy, groupPad } from "./pads.js";
+import { createEntropyCollector, USER_ENTROPY_TARGET_BITS } from "./entropy.js";
 import { createRecoveryPdf, validatePdfContacts } from "./pdf.js";
 import { contactErrors } from "./contacts.js";
 import logo from "../assets/logo-with-domain.webp";
@@ -33,6 +34,7 @@ function App() {
   const [failure, setFailure] = useState("");
   const [samples, setSamples] = useState(0);
   const [taps, setTaps] = useState(0);
+  const [userBits, setUserBits] = useState(0);
   const [inputKind, setInputKind] = useState("mouse / finger");
   const [keyboardMode, setKeyboardMode] = useState(false);
   const [acknowledgments, setAcknowledgments] = useState([false, false]);
@@ -41,7 +43,8 @@ function App() {
   const [pdfUrl, setPdfUrl] = useState("");
   const [reveal, setReveal] = useState(false);
   const [clearDialog, setClearDialog] = useState(false);
-  const movement = useRef([]);
+  const movement = useRef(null);
+  movement.current ??= createEntropyCollector();
   const lastPoint = useRef(null);
   const startTime = useRef(null);
   const drawRef = useRef(null);
@@ -51,7 +54,7 @@ function App() {
   const generationBusy = useRef(false);
   const cryptoReady = typeof globalThis.crypto?.getRandomValues === "function" && !!globalThis.crypto?.subtle;
   const activeKeepers = keepers.slice(0, count);
-  const entropyReady = samples >= 64 || taps >= 12;
+  const entropyReady = userBits >= USER_ENTROPY_TARGET_BITS;
   const keeper = keepers[keeperIndex];
 
   useEffect(() => { headingRef.current?.focus(); }, [stage, keeperIndex]);
@@ -73,7 +76,7 @@ function App() {
 
   function appendMovement(event, mode = "pointer") {
     const native = event.nativeEvent ?? event;
-    if (!native.isTrusted || movement.current.length >= 512) return;
+    if (!native.isTrusted || movement.current.full) return;
     const now = performance.now();
     if (startTime.current === null) startTime.current = now;
     const box = drawRef.current?.getBoundingClientRect();
@@ -82,24 +85,23 @@ function App() {
     if (mode === "pointer" && lastPoint.current?.x === x && lastPoint.current?.y === y) return;
     if (mode === "pointer") lastPoint.current = { x, y };
     const kind = mode === "pointer" ? (event.pointerType || "mouse") : "tap / keyboard";
-    movement.current.push([kind, x, y, Math.round((now - startTime.current) * 1000), Math.round((event.pressure ?? 0) * 1000)]);
+    movement.current.add({ kind, x, y, time: Math.round((now - startTime.current) * 1000), pressure: Math.round((event.pressure ?? 0) * 1000) });
+    setUserBits(movement.current.bits);
     setInputKind(kind);
     if (mode === "pointer") {
-      const n = movement.current.filter((record) => record[0] !== "tap / keyboard").length;
-      setSamples(n);
+      setSamples(movement.current.count - movement.current.countOf("tap / keyboard"));
       const dot = drawRef.current?.querySelector(".movement-dot");
       if (dot) { dot.style.left = `${x / 100}px`; dot.style.top = `${y / 100}px`; dot.style.opacity = "1"; }
     } else {
-      setTaps(movement.current.filter((record) => record[0] === "tap / keyboard").length);
+      setTaps(movement.current.countOf("tap / keyboard"));
     }
   }
 
   function resetMovement() {
-    movement.current.forEach((record) => record.fill(0));
-    movement.current.length = 0;
+    movement.current.clear();
     lastPoint.current = null;
     startTime.current = null;
-    setSamples(0); setTaps(0);
+    setSamples(0); setTaps(0); setUserBits(0);
     const dot = drawRef.current?.querySelector(".movement-dot");
     if (dot) dot.style.opacity = "0";
   }
@@ -145,16 +147,15 @@ function App() {
     try {
       const issues = await validatePdfContacts(activeKeepers);
       if (issues.length) throw new Error(issues.map((i) => i.message).join(" "));
-      contribution = new TextEncoder().encode(JSON.stringify({ version: 1, records: movement.current }));
+      contribution = movement.current.encode();
       const newPads = await generatePadsWithEntropy(count, contribution);
       const bytes = await createRecoveryPdf({
         keepers: activeKeepers, pads: newPads,
-        entropySummary: { sampleCount: movement.current.length, inputKind },
+        entropySummary: { sampleCount: movement.current.count, inputKind },
       });
       if (version !== generationVersion.current) return;
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-      movement.current.forEach((record) => record.fill(0));
-      movement.current.length = 0;
+      movement.current.clear(); setUserBits(0); setSamples(0); setTaps(0);
       setPads(newPads); setPdfUrl(url); setReveal(false); go(4);
     } catch (error) {
       if (version === generationVersion.current) setFailure(error instanceof Error ? error.message : "The sheet could not be generated. No PDF was issued.");
@@ -241,18 +242,18 @@ function App() {
             <h2 id="step-heading" tabIndex="-1" ref={headingRef}>Add your own source of randomness.</h2>
             <p className="subheading">Move your mouse around the area below, or draw with your finger. We mix your movement and event timing with the browser’s cryptographic randomness.</p>
             <div className="entropy-sources">
-              <div><ShieldCheck size={19} aria-hidden="true" /><div><strong>Source 1 · Browser cryptographic RNG</strong><p>A fresh 256-bit random seed for every pad.</p></div><span className="source-status">{cryptoReady ? "Available" : "Unavailable"}</span></div>
-              <div><MousePointer2 size={19} aria-hidden="true" /><div><strong>Source 2 · Your movement + timing</strong><p>Mouse, touch, or accessible keyboard/tap input.</p></div><span className={`source-status ${entropyReady ? "ready" : ""}`}>{entropyReady ? "Collected" : "Awaiting input"}</span></div>
+              <div><ShieldCheck size={19} aria-hidden="true" /><div><strong>Source 1 · Browser cryptographic RNG</strong><p>A fresh {BROWSER_SEED_BITS}-bit random seed for every pad.</p></div><span className="source-status">{cryptoReady ? "Available" : "Unavailable"}</span></div>
+              <div><MousePointer2 size={19} aria-hidden="true" /><div><strong>Source 2 · Your movement + timing</strong><p>At least {USER_ENTROPY_TARGET_BITS} bits from mouse, touch, or keyboard/tap input.</p></div><span className={`source-status ${entropyReady ? "ready" : ""}`}>{entropyReady ? "Collected" : "Awaiting input"}</span></div>
             </div>
             <div ref={drawRef} className="movement-area" onPointerMove={(event) => appendMovement(event)} onPointerDown={(event) => appendMovement(event)} data-testid="movement-area" role="group" aria-label="Move your mouse or finger here to contribute movement and timing">
               <span className="movement-dot" aria-hidden="true"></span>
-              <Fingerprint size={35} aria-hidden="true" /><strong>{entropyReady ? "Your contribution is collected." : "Move your mouse or draw here"}</strong><span>{samples} movement samples{taps ? ` · ${taps} timing taps` : ""}</span>
-              <div className="sample-track" aria-hidden="true"><span style={{ width: `${Math.min(100, Math.max(samples / 64, taps / 12) * 100)}%` }} /></div>
-              <span className="movement-target">{entropyReady ? "You can keep moving, or continue." : "Collect 64 movement samples, or use 12 timing taps."}</span>
+              <Fingerprint size={35} aria-hidden="true" /><strong>{entropyReady ? "Your contribution is collected." : "Move your mouse or draw here"}</strong><span data-testid="entropy-bits">{Math.min(userBits, USER_ENTROPY_TARGET_BITS)} / {USER_ENTROPY_TARGET_BITS} bits · {samples} movement samples{taps ? ` · ${taps} timing taps` : ""}</span>
+              <div className="sample-track" aria-hidden="true"><span style={{ width: `${Math.min(100, (userBits / USER_ENTROPY_TARGET_BITS) * 100)}%` }} /></div>
+              <span className="movement-target">{entropyReady ? "You can keep moving, or continue." : `Keep moving in curves and changing speed until ${USER_ENTROPY_TARGET_BITS} bits are collected.`}</span>
             </div>
             <div className="entropy-utilities"><button className="text-button" onClick={() => setKeyboardMode(!keyboardMode)} aria-expanded={keyboardMode} data-testid="toggle-timing">{keyboardMode ? "Hide timing input" : "Use keyboard / tap timing"}</button><button className="text-button" onClick={resetMovement} data-testid="reset-movement">Start input again</button></div>
-            {keyboardMode && <button className="timing-button" onClick={(event) => appendMovement(event, "timing")} data-testid="timing-tap">Tap or focus and press Space at irregular intervals · {taps} / 12</button>}
-            <p className="technical-note">The sample count is a collection target, not a bit-strength estimate. Movement may be predictable and never replaces Web Crypto. Both inputs are mixed with HKDF-SHA-256.</p>
+            {keyboardMode && <button className="timing-button" onClick={(event) => appendMovement(event, "timing")} data-testid="timing-tap">Tap or focus and press Space at irregular intervals · {taps} taps (slow: up to 4 bits each)</button>}
+            <p className="technical-note">Bits are a conservative estimate: each movement earns at most 2 bits, and only for unpredictable changes in direction and speed; straight or steady motion earns little. It is a collection gate, not a guarantee. For each pad, 1600 bits of browser randomness are combined by XOR with 1600 bits derived from your input (SHA-512 over your full record), so neither source is reduced to a shorter key.</p>
             <div className="actions between"><button className="secondary-button" onClick={() => { setKeeperIndex(count - 1); go(1); }} data-testid="button-back"><ArrowLeft size={16} aria-hidden="true" /> Back</button><button className="primary-button" disabled={!entropyReady || !cryptoReady} onClick={() => go(3)} data-testid="button-review">Review and generate <ArrowRight size={17} aria-hidden="true" /></button></div>
           </>}
           {stage === 3 && <>
@@ -260,7 +261,7 @@ function App() {
             <h2 id="step-heading" tabIndex="-1" ref={headingRef}>Check the details before creating keys.</h2>
             <p className="subheading">Each sharekeeper gets its own {PAD_LENGTH}-letter pad. No keys have been generated yet.</p>
             <div className="contact-review">{activeKeepers.map((k, i) => <article key={k.id} className="review-row"><span className="row-number">{String(i + 1).padStart(2, "0")}</span><div><h3>{k.name || "Contact details missing"}</h3><p>{k.phone || k.website || k.address1 || "Add a contact channel"}</p></div><button className="text-button" disabled={busy} onClick={() => { setKeeperIndex(i); go(1); }} data-testid={`edit-keeper-${i + 1}`}>Edit</button></article>)}</div>
-            <div className="mix-summary"><Fingerprint size={20} aria-hidden="true" /><div><strong>Two sources, one local generation</strong><p>Browser CSPRNG + {movement.current.length} user movement/timing samples → HKDF-SHA-256 → unbiased A–Z selection.</p></div></div>
+            <div className="mix-summary"><Fingerprint size={20} aria-hidden="true" /><div><strong>Two sources, one local generation</strong><p>{BROWSER_SEED_BITS}-bit browser seed per pad ⊕ {BROWSER_SEED_BITS}-bit block from your {movement.current.count} movement/timing samples (≈{Math.min(userBits, 99999)} bits estimated) → unbiased A–Z selection.</p></div></div>
             <p className="technical-note">The PDF is the published sample sheet, unchanged, with each sharekeeper’s contact details and secret pad K written into its share section. First cipher groups, the eight-digit ciphertext CRC32, and wallet passphrases stay blank for you to fill in; this is not a complete backup.</p>
             <div className="acknowledgments">{[
               "I understand this is an unaudited prototype and will test the complete recovery process offline before relying on it.",
@@ -284,7 +285,7 @@ function App() {
           {!cryptoReady && <p className="error-message" role="alert">Web Crypto is unavailable. Use a current browser in a secure context or the downloaded offline app. Generation is blocked; there is no weaker fallback.</p>}
           {failure && <p className="error-message" role="alert" data-testid="generation-error">{failure}</p>}
         </section>
-        <details className="scope-note main-scope"><summary data-testid="toggle-scope">About this prototype and its limits</summary>{PLATFORM_PREVIEW && <p>For an offline app download, use Open standalone app. It opens a fresh GitHub Pages session; your current contacts and keys are not transferred.</p>}<p>The 80-letter profile is an explicit choice for this generator, not a finalized Sharekeeper standard. The 3-of-N label is a layout setting, not proof that shares exist, and custody terms still need explicit agreement.</p><p>The updated sample uses an eight-hex-digit CRC32 field. A checksum is not cryptographic authentication; this generator leaves the ciphertext checksum blank.</p><p>HKDF produces computationally derived key material. This prototype does not claim information-theoretic one-time-pad security or a measured entropy contribution from gestures.</p><p>A downloaded PDF contains secret pads. Clearing this tab cannot erase downloads, print queues, screenshots, or all browser memory.</p></details>
+        <details className="scope-note main-scope"><summary data-testid="toggle-scope">About this prototype and its limits</summary>{PLATFORM_PREVIEW && <p>For an offline app download, use Open standalone app. It opens a fresh GitHub Pages session; your current contacts and keys are not transferred.</p>}<p>The 80-letter profile is an explicit choice for this generator, not a finalized Sharekeeper standard. The 3-of-N label is a layout setting, not proof that shares exist, and custody terms still need explicit agreement.</p><p>The updated sample uses an eight-hex-digit CRC32 field. A checksum is not cryptographic authentication; this generator leaves the ciphertext checksum blank.</p><p>Each pad combines a 1600-bit browser seed with a 1600-bit block derived from your input. Browser randomness is cryptographic pseudorandomness, and the movement figure is a conservative estimate, not a measurement; this prototype does not claim information-theoretic one-time-pad security.</p><p>A downloaded PDF contains secret pads. Clearing this tab cannot erase downloads, print queues, screenshots, or all browser memory.</p></details>
         <footer className="panel-footer"><LockKeyhole size={14} aria-hidden="true" /><span>In-memory only. Refreshing or closing this tab loses the session.</span></footer>
       </main>
       <aside className="sheet-aside" aria-label="Your sheet profile">

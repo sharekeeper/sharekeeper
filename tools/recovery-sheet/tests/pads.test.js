@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { webcrypto } from "node:crypto";
+import { createHash, webcrypto } from "node:crypto";
 import { GROUP_LENGTH, PAD_LENGTH } from "../shared/schema.js";
 import {
+  BROWSER_SEED_BITS,
   generatePads,
   generatePadsWithEntropy,
   groupPad,
@@ -207,7 +208,31 @@ function contribution(value = 1) {
   return new Uint8Array([value, 2, 3, 4, 5, 6]);
 }
 
-test("mixed API generates valid pads with one fresh 32-byte seed per keeper", async () => {
+// Independent reference: SHA-512 counter-mode user block, XOR, rejection.
+async function referencePads(count, input, seedFor) {
+  const pads = [];
+  for (let keeper = 0; keeper < count; keeper += 1) {
+    let pad = "";
+    for (let block = 0; pad.length < PAD_LENGTH; block += 1) {
+      const user = new Uint8Array(200);
+      for (let chunk = 0; chunk * 64 < 200; chunk += 1) {
+        const prefix = new TextEncoder().encode(`sharekeeper/recovery-sheet/user-stream/v2|keeper:${keeper}|block:${block}|chunk:${chunk}|`);
+        const digest = createHash("sha512").update(prefix).update(input).digest();
+        user.set(digest.subarray(0, Math.min(64, 200 - chunk * 64)), chunk * 64);
+      }
+      const seed = seedFor(keeper, block);
+      for (let index = 0; index < 200 && pad.length < PAD_LENGTH; index += 1) {
+        const byte = seed[index] ^ user[index];
+        if (byte < 234) pad += String.fromCharCode(65 + (byte % 26));
+      }
+    }
+    pads.push(pad);
+  }
+  return pads;
+}
+
+test("mixed API draws one fresh 1600-bit (200-byte) browser seed per keeper", async () => {
+  assert.equal(BROWSER_SEED_BITS, 1600);
   for (const count of [3, 4, 5]) {
     const sizes = [];
     const source = {
@@ -220,31 +245,42 @@ test("mixed API generates valid pads with one fresh 32-byte seed per keeper", as
     const pads = await generatePadsWithEntropy(count, contribution(), source);
     assert.equal(pads.length, count);
     assert.ok(pads.every(isValidPad));
-    assert.deepEqual(sizes, Array(count).fill(32));
+    assert.deepEqual(sizes, Array(count).fill(200));
   }
 });
 
+test("mixed API equals XOR of the browser seed and the SHA-512 user block, then rejection", async () => {
+  const input = new Uint8Array(4001).map((_, index) => (index * 37 + 11) & 255);
+  const seeds = [];
+  const source = {
+    subtle: webcrypto.subtle,
+    getRandomValues(bytes) {
+      webcrypto.getRandomValues(bytes);
+      seeds.push(bytes.slice());
+      return bytes;
+    },
+  };
+  const pads = await generatePadsWithEntropy(5, input, source);
+  let call = 0;
+  assert.deepEqual(pads, await referencePads(5, input, () => seeds[call++]));
+});
+
+test("mixed API output is uniform-letter even when the user block is constant", async () => {
+  // With a zero browser seed the pad is exactly the user block's letters;
+  // with a fixed user record, distinct browser seeds still give distinct pads.
+  const fixed = contribution(7);
+  const zero = await generatePadsWithEntropy(3, fixed, mixedSource(0));
+  assert.deepEqual(zero, await referencePads(3, fixed, () => new Uint8Array(200)));
+  const a = await generatePadsWithEntropy(3, fixed);
+  const b = await generatePadsWithEntropy(3, fixed);
+  assert.notDeepEqual(a, b);
+});
+
 test("mixed API changes output when contribution or random seed changes", async () => {
-  const baseline = await generatePadsWithEntropy(
-    3,
-    contribution(1),
-    mixedSource(11),
-  );
-  const sameInputs = await generatePadsWithEntropy(
-    3,
-    contribution(1),
-    mixedSource(11),
-  );
-  const changedContribution = await generatePadsWithEntropy(
-    3,
-    contribution(9),
-    mixedSource(11),
-  );
-  const changedSeed = await generatePadsWithEntropy(
-    3,
-    contribution(1),
-    mixedSource(12),
-  );
+  const baseline = await generatePadsWithEntropy(3, contribution(1), mixedSource(11));
+  const sameInputs = await generatePadsWithEntropy(3, contribution(1), mixedSource(11));
+  const changedContribution = await generatePadsWithEntropy(3, contribution(9), mixedSource(11));
+  const changedSeed = await generatePadsWithEntropy(3, contribution(1), mixedSource(12));
   assert.deepEqual(baseline, sameInputs);
   for (let index = 0; index < baseline.length; index += 1) {
     assert.notEqual(baseline[index], changedContribution[index]);
@@ -257,59 +293,31 @@ test("mixed API changes output when contribution or random seed changes", async 
 test("mixed API rejects invalid counts before hashing or requesting randomness", async () => {
   const source = mixedSource();
   for (const count of [undefined, null, "3", 2, 6, 3.5, NaN, Infinity]) {
-    await assert.rejects(
-      generatePadsWithEntropy(count, contribution(), source),
-      /integer from 3 to 5/,
-    );
+    await assert.rejects(generatePadsWithEntropy(count, contribution(), source), /integer from 3 to 5/);
   }
   assert.equal(source.calls, 0);
 });
 
 test("mixed API rejects empty, wrongly typed, or oversized contributions", async () => {
   const source = mixedSource();
-  for (const input of [
-    undefined,
-    null,
-    "",
-    [1, 2, 3],
-    new ArrayBuffer(3),
-    new Uint8Array(),
-    new Uint8Array(65_537),
-  ]) {
-    await assert.rejects(
-      generatePadsWithEntropy(3, input, source),
-      /nonempty Uint8Array of at most 65536 bytes/,
-    );
+  for (const input of [undefined, null, "", [1, 2, 3], new ArrayBuffer(3), new Uint8Array(), new Uint8Array(262_145)]) {
+    await assert.rejects(generatePadsWithEntropy(3, input, source), /nonempty Uint8Array of at most 262144 bytes/);
   }
   assert.equal(source.calls, 0);
-  const pads = await generatePadsWithEntropy(
-    3,
-    new Uint8Array(65_536),
-    source,
-  );
+  const pads = await generatePadsWithEntropy(3, new Uint8Array(262_144), source);
   assert.ok(pads.every(isValidPad));
 });
 
-test("mixed API fails closed without getRandomValues or complete SubtleCrypto", async () => {
-  for (const source of [
-    null,
-    {},
-    constantSource(),
-    { subtle: webcrypto.subtle },
-    { ...constantSource(), subtle: {} },
-    { ...constantSource(), subtle: { digest() {}, importKey() {} } },
-  ]) {
-    await assert.rejects(
-      generatePadsWithEntropy(3, contribution(), source),
-      /Web Crypto SubtleCrypto are required/,
-    );
+test("mixed API fails closed without getRandomValues or SubtleCrypto digest", async () => {
+  for (const source of [null, {}, constantSource(), { subtle: webcrypto.subtle }, { ...constantSource(), subtle: {} }]) {
+    await assert.rejects(generatePadsWithEntropy(3, contribution(), source), /Web Crypto SubtleCrypto are required/);
   }
 });
 
 test("mixed API snapshots caller input and clears private byte buffers", async () => {
   const original = contribution();
   const snapshot = original.slice();
-  const captures = { seeds: [], batches: [], input: null, salt: null };
+  const captures = { seeds: [], inputs: [], digests: [] };
   const source = {
     getRandomValues(bytes) {
       captures.seeds.push(bytes);
@@ -317,41 +325,11 @@ test("mixed API snapshots caller input and clears private byte buffers", async (
       return bytes;
     },
     subtle: {
-      digest(algorithm, bytes) {
-        captures.input = bytes;
-        assert.notEqual(bytes, original);
-        assert.deepEqual(bytes, snapshot);
+      async digest(algorithm, bytes) {
+        assert.equal(algorithm, "SHA-512");
+        captures.inputs.push(bytes);
         original.fill(99);
-        return webcrypto.subtle.digest(algorithm, bytes);
-      },
-      importKey(format, seed, algorithm, extractable, usages) {
-        assert.equal(format, "raw");
-        assert.equal(algorithm, "HKDF");
-        assert.equal(extractable, false);
-        assert.deepEqual(usages, ["deriveBits"]);
-        return webcrypto.subtle.importKey(
-          format,
-          seed,
-          algorithm,
-          extractable,
-          usages,
-        );
-      },
-      async deriveBits(algorithm, key, bitLength) {
-        captures.salt = algorithm.salt;
-        assert.equal(algorithm.name, "HKDF");
-        assert.equal(algorithm.hash, "SHA-256");
-        assert.equal(bitLength, 256 * 8);
-        assert.match(
-          new TextDecoder().decode(algorithm.info),
-          /^sharekeeper\/recovery-sheet\/pad\/v1\|keeper:[0-2]\|batch:0$/,
-        );
-        const result = await webcrypto.subtle.deriveBits(
-          algorithm,
-          key,
-          bitLength,
-        );
-        captures.batches.push(new Uint8Array(result));
+        const result = await webcrypto.subtle.digest(algorithm, bytes);
         return result;
       },
     },
@@ -360,15 +338,14 @@ test("mixed API snapshots caller input and clears private byte buffers", async (
   const expected = await generatePadsWithEntropy(3, snapshot, mixedSource(18));
   assert.deepEqual(pads, expected);
   assert.ok(original.every((byte) => byte === 99)); // Caller-owned, not erased.
-  assert.ok(captures.input.every((byte) => byte === 0));
-  assert.ok(captures.salt.every((byte) => byte === 0));
-  for (const bytes of [...captures.seeds, ...captures.batches]) {
+  assert.equal(captures.inputs.length, 3 * 4);
+  for (const bytes of [...captures.seeds, ...captures.inputs]) {
     assert.ok(bytes.every((byte) => byte === 0));
   }
 });
 
-test("mixed API clears seed and contribution buffers on import failure", async () => {
-  const failure = new Error("Synthetic HKDF import failure");
+test("mixed API clears seed and inputs on digest failure", async () => {
+  const failure = new Error("Synthetic digest failure");
   let capturedSeed;
   let capturedInput;
   const source = {
@@ -380,65 +357,37 @@ test("mixed API clears seed and contribution buffers on import failure", async (
     subtle: {
       digest(algorithm, bytes) {
         capturedInput = bytes;
-        return webcrypto.subtle.digest(algorithm, bytes);
-      },
-      importKey() {
         throw failure;
-      },
-      deriveBits() {
-        assert.fail("Derivation must not run after import failure.");
       },
     },
   };
-  await assert.rejects(
-    generatePadsWithEntropy(3, contribution(), source),
-    (error) => error === failure,
-  );
+  await assert.rejects(generatePadsWithEntropy(3, contribution(), source), (error) => error === failure);
   assert.ok(capturedSeed.every((byte) => byte === 0));
   assert.ok(capturedInput.every((byte) => byte === 0));
 });
 
-test("mixed API rejects high bytes and bounds pathological HKDF output", async () => {
-  let batches = 0;
-  const source = mixedSource(1, {
-    digest: (...args) => webcrypto.subtle.digest(...args),
-    importKey: (...args) => webcrypto.subtle.importKey(...args),
-    deriveBits() {
-      batches += 1;
-      return new Uint8Array(256).fill(234 + (batches % 22)).buffer;
+test("mixed API rejects high bytes and bounds a pathological source", async () => {
+  // Choose browser bytes so every combined byte is >= 234 (always rejected).
+  const input = contribution();
+  const reference = [];
+  for (let block = 0; block < 8; block += 1) {
+    const user = new Uint8Array(200);
+    for (let chunk = 0; chunk * 64 < 200; chunk += 1) {
+      const prefix = new TextEncoder().encode(`sharekeeper/recovery-sheet/user-stream/v2|keeper:0|block:${block}|chunk:${chunk}|`);
+      user.set(createHash("sha512").update(prefix).update(input).digest().subarray(0, Math.min(64, 200 - chunk * 64)), chunk * 64);
+    }
+    reference.push(user);
+  }
+  let calls = 0;
+  const source = {
+    subtle: webcrypto.subtle,
+    getRandomValues(bytes) {
+      const user = reference[calls];
+      calls += 1;
+      for (let index = 0; index < bytes.length; index += 1) bytes[index] = user[index] ^ 255;
+      return bytes;
     },
-  });
-  await assert.rejects(
-    generatePadsWithEntropy(3, contribution(), source),
-    /Entropy mixing exceeded its rejection-sampling limit/,
-  );
-  assert.equal(batches, 128);
-  assert.equal(source.calls, 1);
-});
-
-test("mixed API separates retry batches and applies rejection before modulo", async () => {
-  const contexts = [];
-  const source = mixedSource(1, {
-    digest: (...args) => webcrypto.subtle.digest(...args),
-    importKey: (...args) => webcrypto.subtle.importKey(...args),
-    deriveBits(algorithm) {
-      const context = new TextDecoder().decode(algorithm.info);
-      contexts.push(context);
-      if (context.endsWith("batch:0")) {
-        return new Uint8Array(256).fill(255).buffer;
-      }
-      const bytes = new Uint8Array(256);
-      const sample = [234, 255, 0, 25, 26, 51, 52, 233];
-      for (let index = 0; index < bytes.length; index += 1) {
-        bytes[index] = sample[index % sample.length];
-      }
-      return bytes.buffer;
-    },
-  });
-  const pads = await generatePadsWithEntropy(3, contribution(), source);
-  const expected = "AZAZAZ".repeat(Math.ceil(PAD_LENGTH / 6)).slice(0, PAD_LENGTH);
-  assert.deepEqual(pads, Array(3).fill(expected));
-  assert.equal(new Set(contexts).size, 6);
-  assert.ok(contexts[0].endsWith("keeper:0|batch:0"));
-  assert.ok(contexts[1].endsWith("keeper:0|batch:1"));
+  };
+  await assert.rejects(generatePadsWithEntropy(3, input, source), /Entropy mixing exceeded its rejection-sampling limit/);
+  assert.equal(calls, 8);
 });

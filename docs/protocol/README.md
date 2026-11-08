@@ -14,7 +14,7 @@ The protocol-diagram PDF has been removed from the current repository and websit
 
 ## Browser generator boundary
 
-The [browser recovery-sheet generator](../../tools/recovery-sheet/README.md) interviews 3–5 keepers and fills a derivative worksheet with private pads using an explicit 80-letter, 20-by-4 profile. Browser cryptographic randomness and user movement/timing are mixed locally with HKDF-SHA-256; this is computational derivation, not an information-theoretic one-time-pad claim.
+The [browser recovery-sheet generator](../../tools/recovery-sheet/README.md) interviews 3–5 keepers and fills the unchanged sample sheet with private pads using an explicit 80-letter, 20-by-4 profile. For each pad a 1600-bit browser random seed is XORed with a 1600-bit block derived (SHA-512) from user movement/timing collected until a conservative estimate reaches 1600 bits. Browser randomness is pseudorandom, so this is not an information-theoretic one-time-pad claim.
 
 The tool does not accept seed/share input or generate or encrypt SLIP-39 shares. Ciphertext-prefix groups, the eight-cell ciphertext CRC32 field, and the wallet/passphrase table remain blank; no checksum of a private K pad is calculated.
 
