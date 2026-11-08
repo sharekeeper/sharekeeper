@@ -232,48 +232,6 @@
         "counter garden academic acid angel chubby frequent agree glen apart energy froth sled morning staff hobo type focus duckling human",
         "counter garden academic agency behavior losing game learn fatal triumph river remind chemical soldier necklace remember lecture mountain guilt aunt"
       ]
-    },
-    {
-      "name": "128-bit 1-of-2 default params",
-      "masterSecretHex": "1ffc644d1109b783aaf7a16be43709e3",
-      "threshold": 1,
-      "shareCount": 2,
-      "passphrase": "",
-      "iterationExponent": 1,
-      "extendable": true,
-      "rngSeedHex": "62a31727443ff04f88eb99ea8b909bb0969ae08c12371605274be7c1b9700712",
-      "mnemonics": [
-        "member fawn academic easy aluminum canyon robin arena society lawsuit pickup scandal welcome hamster width pistol amuse listen friar best",
-        "member fawn away easy aluminum canyon robin arena society lawsuit pickup scandal welcome hamster width pistol amuse moment jewelry oven"
-      ]
-    },
-    {
-      "name": "256-bit 1-of-2 TREZOR e=0",
-      "masterSecretHex": "9e32d7d5ca11ba7ac26a0703115d5f7b55e533fdbf48b151a5522afcb9e8fb20",
-      "threshold": 1,
-      "shareCount": 2,
-      "passphrase": "TREZOR",
-      "iterationExponent": 0,
-      "extendable": true,
-      "rngSeedHex": "1026538bae60b7b4ada3aa26f1025d00ffb882ae34270ab20448920982779d0b",
-      "mnemonics": [
-        "darkness wisdom academic easy antenna research grill trash result column ticket alive wine writing piece visitor describe lunch drift industry drove family grumpy floral system capacity alive sunlight branch shadow traveler result island",
-        "darkness wisdom away easy antenna research grill trash result column ticket alive wine writing piece visitor describe lunch drift industry drove family grumpy floral system capacity alive sunlight branch shadow garbage express olympic"
-      ]
-    },
-    {
-      "name": "128-bit 1-of-2 non-extendable e=2",
-      "masterSecretHex": "38fb54c94d8481fb09a4dc0bfae9a7b4",
-      "threshold": 1,
-      "shareCount": 2,
-      "passphrase": "",
-      "iterationExponent": 2,
-      "extendable": false,
-      "rngSeedHex": "90860f794ead7ceecaf098ac2fba25f4797d84b75e20ff9b1528959ad41466d2",
-      "mnemonics": [
-        "render disease academic easy adequate spirit platform kidney nail submit receiver taught garbage both superior spark slap heat founder mother",
-        "render disease away easy adequate spirit platform kidney nail submit receiver taught garbage both superior spark slap knife ladybug bucket"
-      ]
     }
   ]
 }

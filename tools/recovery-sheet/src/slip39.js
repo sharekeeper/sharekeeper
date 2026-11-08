@@ -8,15 +8,14 @@
  * injected Web Crypto object (`crypto`, with `getRandomValues` and `subtle`):
  * `globalThis.crypto` in browsers and in Node >= 20.
  *
- * Scope: share creation supports T-of-N with 2 <= T <= N <= 16 as a single
- * group (group threshold 1, group count 1), and 1-of-2 as two 1-of-1 groups
- * with group threshold 1, for 128- or 256-bit master secrets. Combining
- * accepts any valid SLIP-39 share set, including multi-group sets.
+ * Scope: share creation is single-level only: T-of-N with 2 <= T <= N <= 16
+ * as one group (group threshold 1, group count 1), for 128- or 256-bit master
+ * secrets. Combining is a full SLIP-39 decoder and accepts any valid share
+ * set, including multi-group sets and 1-of-1 shares.
  *
  * Randomness is drawn in exactly the same order and sizes as the reference
- * implementation (2 bytes for the identifier, then, when T >= 2, T-2 random
- * share values of n bytes each and n-4 bytes for the digest's random part;
- * 1-of-2 draws only the identifier), so with the same
+ * implementation (2 bytes for the identifier, then T-2 random share values of
+ * n bytes each, then n-4 bytes for the digest's random part), so with the same
  * byte stream both produce identical mnemonics; tests/slip39.test.js checks
  * this against vendored output of the Python implementation.
  *
@@ -101,13 +100,18 @@ function mnemonicToIndices(mnemonic) {
   const trimmed = mnemonic.trim();
   if (trimmed === "") fail("Mnemonic is empty");
   const tokens = trimmed.split(/\s+/);
-  const indices = new Array(tokens.length);
-  for (let i = 0; i < tokens.length; i += 1) {
-    const index = tokenToIndex(tokens[i]);
-    if (index < 0) fail(`Word ${i + 1} is not in the SLIP-39 wordlist`);
-    indices[i] = index;
+  const indices = new Array(tokens.length).fill(0);
+  try {
+    for (let i = 0; i < tokens.length; i += 1) {
+      const index = tokenToIndex(tokens[i]);
+      if (index < 0) fail(`Word ${i + 1} is not in the SLIP-39 wordlist`);
+      indices[i] = index;
+    }
+    return indices;
+  } catch (error) {
+    indices.fill(0);
+    throw error;
   }
-  return indices;
 }
 
 /**
@@ -289,8 +293,12 @@ export function decodeMnemonic(mnemonic) {
     if (groupThreshold > groupCount) fail("Invalid mnemonic: group threshold cannot be greater than group count");
 
     const valueWords = data.slice(ID_EXP_LENGTH_WORDS + 2, data.length - CHECKSUM_LENGTH_WORDS);
-    const value = wordIndicesToBytes(valueWords, paddingBits);
-    valueWords.fill(0);
+    let value;
+    try {
+      value = wordIndicesToBytes(valueWords, paddingBits);
+    } finally {
+      valueWords.fill(0);
+    }
     if (value === null) fail("Invalid mnemonic padding: the padding bits of the share value are not zero");
 
     return {
@@ -323,12 +331,18 @@ function encodeShare(share) {
     (share.memberThreshold - 1);
   const valueWordCount = Math.ceil((share.value.length * 8) / RADIX_BITS);
   const valueWords = bytesToWordIndices(share.value, valueWordCount);
-  const data = [(idExp >>> 10) & 1023, idExp & 1023, (params >>> 10) & 1023, params & 1023, ...valueWords];
-  const checksum = rs1024CreateChecksum(data, share.extendable);
-  const mnemonic = [...data, ...checksum].map((index) => WORDLIST[index]).join(" ");
-  valueWords.fill(0);
-  data.fill(0);
-  return mnemonic;
+  let data = [];
+  let all = [];
+  try {
+    data = [(idExp >>> 10) & 1023, idExp & 1023, (params >>> 10) & 1023, params & 1023, ...valueWords];
+    const checksum = rs1024CreateChecksum(data, share.extendable);
+    all = [...data, ...checksum];
+    return all.map((index) => WORDLIST[index]).join(" ");
+  } finally {
+    valueWords.fill(0);
+    data.fill(0);
+    all.fill(0);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -400,14 +414,21 @@ async function hmacSha256(subtle, keyBytes, message) {
 
 async function createDigest(subtle, randomPart, sharedSecret) {
   const mac = await hmacSha256(subtle, randomPart, sharedSecret);
-  const digest = mac.slice(0, DIGEST_LENGTH_BYTES);
-  mac.fill(0);
-  return digest;
+  try {
+    return mac.slice(0, DIGEST_LENGTH_BYTES);
+  } finally {
+    mac.fill(0);
+  }
 }
 
 function randomBytes(crypto, length) {
   const bytes = new Uint8Array(length);
-  crypto.getRandomValues(bytes);
+  try {
+    crypto.getRandomValues(bytes);
+  } catch (error) {
+    bytes.fill(0); // the RNG may have partially filled the buffer before failing
+    throw error;
+  }
   // Cheap guard against a stubbed or broken RNG (all bytes equal in a buffer of
   // >= 12 bytes has probability < 2^-88 for a working RNG). Consumes no extra randomness.
   if (length >= 12 && bytes.every((byte) => byte === bytes[0])) {
@@ -428,43 +449,51 @@ async function splitSecret(crypto, threshold, shareCount, secret) {
   }
   const n = secret.length;
   const shares = [];
-  for (let x = 0; x < threshold - 2; x += 1) shares.push({ x, data: randomBytes(crypto, n) });
-  const randomPart = randomBytes(crypto, n - DIGEST_LENGTH_BYTES);
-  const digest = await createDigest(crypto.subtle, randomPart, secret);
-  const digestShare = new Uint8Array(n);
-  digestShare.set(digest, 0);
-  digestShare.set(randomPart, DIGEST_LENGTH_BYTES);
-  digest.fill(0);
-  randomPart.fill(0);
-  const base = [...shares, { x: DIGEST_INDEX, data: digestShare }, { x: SECRET_INDEX, data: secret }];
+  let randomPart;
+  let digest;
+  let digestShare;
   try {
+    for (let x = 0; x < threshold - 2; x += 1) shares.push({ x, data: randomBytes(crypto, n) });
+    randomPart = randomBytes(crypto, n - DIGEST_LENGTH_BYTES);
+    digest = await createDigest(crypto.subtle, randomPart, secret);
+    digestShare = new Uint8Array(n);
+    digestShare.set(digest, 0);
+    digestShare.set(randomPart, DIGEST_LENGTH_BYTES);
+    const base = [...shares, { x: DIGEST_INDEX, data: digestShare }, { x: SECRET_INDEX, data: secret }];
     for (let x = threshold - 2; x < shareCount; x += 1) shares.push({ x, data: interpolate(base, x) });
+    return shares;
+  } catch (error) {
+    for (const share of shares) share.data.fill(0);
+    throw error;
   } finally {
-    digestShare.fill(0);
+    randomPart?.fill(0);
+    digest?.fill(0);
+    digestShare?.fill(0);
   }
-  return shares;
 }
 
 /** RecoverSecret(T, shares) from the spec, including the digest check. */
 async function recoverSecret(subtle, threshold, shares) {
   if (threshold === 1) return shares[0].data.slice();
-  const secret = interpolate(shares, SECRET_INDEX);
-  const digestShare = interpolate(shares, DIGEST_INDEX);
-  const randomPart = digestShare.slice(DIGEST_LENGTH_BYTES);
+  let secret;
+  let digestShare;
+  let randomPart;
   let digest;
   try {
+    secret = interpolate(shares, SECRET_INDEX);
+    digestShare = interpolate(shares, DIGEST_INDEX);
+    randomPart = digestShare.slice(DIGEST_LENGTH_BYTES);
     digest = await createDigest(subtle, randomPart, secret);
     if (!constantTimeEqual(digest, digestShare.subarray(0, DIGEST_LENGTH_BYTES))) {
-      secret.fill(0);
       fail("Invalid digest of the shared secret: the shares do not belong together or one has been altered");
     }
-    return secret;
-  } catch (error) {
-    secret.fill(0);
-    throw error;
+    const result = secret;
+    secret = undefined; // hand ownership to the caller; not wiped below
+    return result;
   } finally {
-    digestShare.fill(0);
-    randomPart.fill(0);
+    secret?.fill(0);
+    digestShare?.fill(0);
+    randomPart?.fill(0);
     digest?.fill(0);
   }
 }
@@ -524,12 +553,15 @@ async function feistel(subtle, input, passphrase, iterationExponent, identifier,
   try {
     for (const i of rounds) {
       const f = await roundFunction(subtle, i, passphrase, iterationExponent, prefix, r);
-      const next = new Uint8Array(half);
-      for (let k = 0; k < half; k += 1) next[k] = l[k] ^ f[k];
-      f.fill(0);
-      l.fill(0);
-      l = r;
-      r = next;
+      try {
+        const next = new Uint8Array(half);
+        for (let k = 0; k < half; k += 1) next[k] = l[k] ^ f[k];
+        l.fill(0);
+        l = r;
+        r = next;
+      } finally {
+        f.fill(0);
+      }
     }
     const out = new Uint8Array(input.length);
     out.set(r, 0);
@@ -538,6 +570,7 @@ async function feistel(subtle, input, passphrase, iterationExponent, identifier,
   } finally {
     l.fill(0);
     r.fill(0);
+    prefix.fill(0);
   }
 }
 
@@ -569,17 +602,9 @@ function requireSubtle(crypto) {
 
 /**
  * Splits a 16- or 32-byte master secret into `shareCount` SLIP-39 mnemonics,
- * any `threshold` of which recover it. Returns the mnemonics in share order.
- *
- * Layouts (both spec-valid; SLIP-39 forbids member threshold 1 with more than
- * one member share):
- *   - threshold >= 2: one group (GT = 1, G = 1), member threshold T, member
- *     indices 0 .. N-1.
- *   - threshold === 1 (only with shareCount === 2, i.e. 1-of-2): N groups of
- *     one share each (GT = 1, G = N, group index i, member threshold 1, member
- *     index 0). Each mnemonic alone recovers the secret. This is what the
- *     reference produces for generate_mnemonics(1, [(1, 1), (1, 1)], ...).
- *     Note that both shares carry the same encrypted master secret.
+ * any `threshold` of which recover it. Single-level scheme only: one group
+ * (GT = 1, G = 1), member threshold T with 2 <= T <= N, member indices
+ * 0 .. N-1. Threshold 1 is rejected. Returns the mnemonics in member-index order.
  *
  * Before returning, every mnemonic is decoded again and its fields checked; the
  * EMS is recovered (with digest check when T >= 2) from shareCount cyclic
@@ -599,26 +624,30 @@ export async function splitMasterSecret({
     fail("Master secret must be a Uint8Array of 16 or 32 bytes");
   }
   if (!isIntInRange(shareCount, 2, MAX_SHARE_COUNT)) fail(`Share count must be an integer from 2 to ${MAX_SHARE_COUNT}`);
-  if (!isIntInRange(threshold, 1, shareCount)) fail("Threshold must be an integer from 1 to the share count");
-  if (threshold === 1 && shareCount !== 2) fail("Threshold 1 is only supported with 2 shares (1-of-2)");
+  if (!isIntInRange(threshold, 2, shareCount)) fail("Threshold must be an integer from 2 to the share count");
   if (!isIntInRange(iterationExponent, 0, 15)) fail("Iteration exponent must be an integer from 0 to 15");
   if (typeof extendable !== "boolean") fail("extendable must be a boolean");
   if (typeof crypto?.getRandomValues !== "function") fail("A Web Crypto object with getRandomValues is required");
   const subtle = requireSubtle(crypto);
-  const pass = passphraseBytes(passphrase);
 
-  const idBytes = new Uint8Array(2);
-  crypto.getRandomValues(idBytes);
-  const identifier = ((idBytes[0] << 8) | idBytes[1]) & ((1 << ID_LENGTH_BITS) - 1);
-  idBytes.fill(0);
-
-  const wipe = [pass];
+  // Every intermediate buffer is registered here as soon as it exists and is
+  // zeroed in the finally block on success and on every failure path. Only the
+  // returned mnemonic strings survive. The caller's masterSecret is never written.
+  const wipe = [];
   try {
+    const pass = passphraseBytes(passphrase);
+    wipe.push(pass);
+    const idBytes = new Uint8Array(2);
+    wipe.push(idBytes);
+    crypto.getRandomValues(idBytes);
+    const identifier = ((idBytes[0] << 8) | idBytes[1]) & ((1 << ID_LENGTH_BITS) - 1);
+    idBytes.fill(0);
+
     const ems = await encryptMasterSecret(subtle, masterSecret, pass, iterationExponent, identifier, extendable);
     wipe.push(ems);
 
-    // GenerateShares from the spec, restricted to the two layouts above.
-    const groups = threshold === 1 ? Array.from({ length: shareCount }, () => [1, 1]) : [[threshold, shareCount]];
+    // GenerateShares from the spec with GT = 1 and a single (T, N) group.
+    const groups = [[threshold, shareCount]];
     const groupShares = await splitSecret(crypto, 1, groups.length, ems);
     for (const share of groupShares) wipe.push(share.data);
     const shares = []; // { fields, value }
@@ -636,8 +665,12 @@ export async function splitMasterSecret({
     const mnemonics = shares.map(({ fields, value }) => encodeShare({ ...fields, value }));
 
     // Self-check before handing anything out.
-    const decoded = mnemonics.map((mnemonic) => decodeMnemonic(mnemonic));
-    for (const share of decoded) wipe.push(share.value);
+    const decoded = [];
+    for (const mnemonic of mnemonics) {
+      const share = decodeMnemonic(mnemonic);
+      wipe.push(share.value);
+      decoded.push(share);
+    }
     decoded.forEach((share, i) => {
       const { fields, value } = shares[i];
       for (const key of Object.keys(fields)) {
@@ -647,13 +680,14 @@ export async function splitMasterSecret({
     });
     for (let start = 0; start < shareCount; start += 1) {
       const window = Array.from({ length: threshold }, (_, k) => decoded[(start + k) % shareCount]);
-      // Every window lies in a single group (one group, or 1-share windows); the group threshold is 1.
       const recovered = await recoverSecret(subtle, threshold, window.map((s) => ({ x: s.memberIndex, data: s.value })));
+      wipe.push(recovered);
       const ok = constantTimeEqual(recovered, ems);
       recovered.fill(0);
       if (!ok) throw new Error("SLIP-39 self-check failed: shares do not recover the encrypted master secret");
     }
     const roundTrip = await decryptMasterSecret(subtle, ems, pass, iterationExponent, identifier, extendable);
+    wipe.push(roundTrip);
     const ok = constantTimeEqual(roundTrip, masterSecret);
     roundTrip.fill(0);
     if (!ok) throw new Error("SLIP-39 self-check failed: decryption does not return the master secret");
@@ -678,9 +712,12 @@ export async function splitMasterSecret({
 export async function combineMnemonics(mnemonics, passphrase = "", crypto) {
   if (!Array.isArray(mnemonics) || mnemonics.length === 0) fail("The list of mnemonics is empty");
   const subtle = requireSubtle(crypto);
-  const pass = passphraseBytes(passphrase);
-  const wipe = [pass];
+  // Every intermediate buffer is registered as soon as it exists and zeroed in
+  // the finally block; only the returned master secret survives.
+  const wipe = [];
   try {
+    const pass = passphraseBytes(passphrase);
+    wipe.push(pass);
     const shares = mnemonics.map((mnemonic, i) => {
       try {
         const share = decodeMnemonic(mnemonic);

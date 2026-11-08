@@ -49,13 +49,35 @@ test("master secret is 16 bytes, needs input and Web Crypto, and differs per cal
   const b = await generateMasterSecret(contribution, webcrypto);
   assert.equal(a.length, MASTER_SECRET_BYTES);
   assert.notDeepEqual(a, b);
-  // With a fixed CSPRNG of zeros, the result is the SHA-512 prefix of the domain-separated input.
-  const zeros = { getRandomValues: (array) => array.fill(0), subtle: webcrypto.subtle };
-  const fixed = await generateMasterSecret(contribution, zeros);
+  // With a fixed CSPRNG block r, the result is r XOR the SHA-512 prefix of the domain-separated input.
+  const counter = { getRandomValues: (array) => { array.forEach((_, i) => { array[i] = i; }); return array; }, subtle: webcrypto.subtle };
+  const fixed = await generateMasterSecret(contribution, counter);
   const digest = new Uint8Array(await webcrypto.subtle.digest("SHA-512", new Uint8Array([...new TextEncoder().encode("sharekeeper/shamir-offline/master-secret/v1|"), 2, 1, 2, 3])));
-  assert.deepEqual(fixed, digest.slice(0, 16));
+  assert.deepEqual(fixed, digest.slice(0, 16).map((b, i) => b ^ i));
+  // A constant RNG block is refused.
+  await assert.rejects(() => generateMasterSecret(contribution, { getRandomValues: (a) => a.fill(7), subtle: webcrypto.subtle }), /constant/);
   await assert.rejects(() => generateMasterSecret(new Uint8Array(0), webcrypto));
   await assert.rejects(() => generateMasterSecret(contribution, {}));
+});
+
+test("master secret failure paths wipe every buffer they touched", async () => {
+  const contribution = new Uint8Array([2, 9, 8, 7]);
+  // 1. digest rejects: the hashed input buffer must be zero.
+  let seenInput;
+  await assert.rejects(() => generateMasterSecret(contribution, {
+    getRandomValues: webcrypto.getRandomValues.bind(webcrypto),
+    subtle: { digest: async (_a, input) => { seenInput = input; throw new Error("digest failed"); } },
+  }), /digest failed/);
+  assert.ok(seenInput.length > 0 && seenInput.every((b) => b === 0));
+  // 2. RNG fills partially then throws: digest and secret buffers must be zero.
+  let seenSecret; let seenDigest;
+  await assert.rejects(() => generateMasterSecret(contribution, {
+    getRandomValues: (array) => { seenSecret = array; array.fill(0xAB, 0, 8); throw new Error("rng failed"); },
+    subtle: { digest: async (a, input) => { const out = await webcrypto.subtle.digest(a, input); seenDigest = new Uint8Array(out); return seenDigest.buffer; } },
+  }), /rng failed/);
+  assert.ok(seenSecret.every((b) => b === 0), "partial secret wiped");
+  assert.ok(seenDigest.every((b) => b === 0), "digest wiped");
+  assert.deepEqual([...contribution], [2, 9, 8, 7], "caller input untouched");
 });
 
 test("threshold subsets enumerate every n-of-m set", () => {
@@ -99,7 +121,8 @@ test("recovery sheet fills first 2 cipher groups and CRC32 in their template box
     const crcs = texts.map(ciphertextCrc32);
     const bytes = await createRecoveryPdf({ keepers: keepers(count), pads, threshold: 2, cipherGroups: groups, ciphertextCrcs: crcs });
     const document = await PDFDocument.load(bytes);
-    const [page] = document.getPages();
+    assert.equal(document.getPageCount(), 3);
+    for (const page of document.getPages()) {
     const overlay = streamsOf(document, page).at(-1);
     const all = runs(document, page, overlay);
     const prefixRuns = all.filter((r) => r.size === PREFIX_LETTER_SIZE);
@@ -119,6 +142,7 @@ test("recovery sheet fills first 2 cipher groups and CRC32 in their template box
       assert.equal(digits.map((r) => r.value).join(""), crcs[slot]);
       digits.forEach((r, i) => assert.ok(r.x > CRC_CELL.x + i * CRC_CELL.width && r.x < CRC_CELL.x + (i + 1) * CRC_CELL.width));
     }
+    }
   }
 });
 
@@ -131,27 +155,31 @@ test("recovery sheet rejects malformed cipher groups or CRCs", async () => {
   await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: ["ABCDEFGH"], ciphertextCrcs: ["00000000"] }));
 });
 
-test("keeper ciphertext PDF has one page per keeper with only that ciphertext and CRC", async () => {
+test("hand-out is one PDF with one page per keeper, each page holding only that keeper's name, ciphertext and CRC", async () => {
   const pads = ["B".repeat(80), "C".repeat(80), "D".repeat(80)];
   const texts = pads.map((pad) => encryptPrefixes(P, pad));
-  const bytes = await createKeeperCiphertextPdf({ keepers: keepers(3), ciphertexts: texts, threshold: 2 });
+  const people = keepers(3);
+  const bytes = await createKeeperCiphertextPdf({ keepers: people, ciphertexts: texts, threshold: 2 });
   const document = await PDFDocument.load(bytes);
   assert.equal(document.getPageCount(), 3);
   document.getPages().forEach((page, index) => {
     assert.equal(page.getWidth(), 612);
     assert.equal(page.getHeight(), 792);
     const text = runs(document, page, streamsOf(document, page).join("\n")).map((r) => r.value);
-    const letters = text.filter((v) => /^[A-Z]$/.test(v)).join("");
-    assert.equal(letters, texts[index]);
+    assert.equal(text.filter((v) => /^[A-Z]$/.test(v)).join(""), texts[index]);
     assert.ok(text.includes(ciphertextCrc32(texts[index])));
     assert.ok(text.includes(`TEST ONLY Keeper ${index + 1}`));
     assert.ok(text.some((v) => v.includes(`SHARE 0${index + 1}  |  2 OF 3`)));
-    // No pad, plaintext or other keeper's ciphertext on this page.
     const joined = text.join("\n");
+    // No pad or plaintext anywhere; no other keeper's name or ciphertext on this page.
     assert.ok(!joined.includes(pads[index]) && !joined.includes(P));
-    texts.forEach((other, j) => { if (j !== index) assert.ok(!joined.includes(ciphertextCrc32(other))); });
+    texts.forEach((other, j) => { if (j !== index) { assert.ok(!joined.includes(ciphertextCrc32(other))); assert.ok(!joined.includes(people[j].name)); } });
   });
-  await assert.rejects(() => createKeeperCiphertextPdf({ keepers: keepers(3), ciphertexts: texts.slice(0, 2), threshold: 2 }));
-  await assert.rejects(() => createKeeperCiphertextPdf({ keepers: keepers(3), ciphertexts: texts, threshold: 4 }));
-  await assert.rejects(() => createKeeperCiphertextPdf({ keepers: keepers(3), ciphertexts: ["a".repeat(80), ...texts.slice(1)], threshold: 2 }));
+  const ok = { keepers: people, ciphertexts: texts, threshold: 2 };
+  await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, ciphertexts: texts.slice(0, 2) }));
+  await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, threshold: 4 }));
+  await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, threshold: 1 }));
+  await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, ciphertexts: ["a".repeat(80), ...texts.slice(1)] }));
+  await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, keepers: [{ name: " " }, ...people.slice(1)] }));
+  await assert.rejects(() => createKeeperCiphertextPdf({ keepers: people.slice(0, 2), ciphertexts: texts.slice(0, 2), threshold: 1 }));
 });

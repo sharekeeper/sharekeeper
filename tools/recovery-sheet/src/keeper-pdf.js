@@ -16,24 +16,28 @@ function decodeBase64(base64) {
 }
 
 /**
- * One US Letter page per sharekeeper with only that keeper's ciphertext: the
- * 80 letters in 20 numbered groups and their CRC32. It contains no pad, share,
- * seed or other keeper's data. Generated in browser memory only.
+ * One hand-out PDF for the sharekeepers: one US Letter page per keeper, each
+ * page holding only that keeper's name, ciphertext (80 letters in 20 numbered
+ * groups) and its CRC32. No page contains a pad, plaintext share or seed. The
+ * owner prints it and gives each sharekeeper only their own page. The owner's
+ * unified recovery sheet is a separate PDF. Generated in browser memory only.
  */
 export async function createKeeperCiphertextPdf({ keepers, ciphertexts, threshold }) {
   if (!Array.isArray(keepers) || !Array.isArray(ciphertexts) || keepers.length !== ciphertexts.length || keepers.length < 2 || keepers.length > 5) {
-    throw new Error("Ciphertext export needs one ciphertext per keeper (2 to 5).");
+    throw new Error("Ciphertext hand-out needs one ciphertext per sharekeeper (2 to 5).");
   }
-  if (!isValidThreshold(threshold, keepers.length)) {
-    throw new Error(`Recovery threshold must be one of ${thresholdOptions(keepers.length).join(", ")} for ${keepers.length} sharekeepers.`);
+  const count = keepers.length;
+  if (!isValidThreshold(threshold, count)) {
+    throw new Error(`Recovery threshold must be one of ${thresholdOptions(count).join(", ")} for ${count} sharekeepers.`);
   }
+  if (keepers.some((keeper) => typeof keeper?.name !== "string" || !keeper.name.trim())) throw new Error("Each ciphertext page needs the sharekeeper's name.");
   const document = await PDFDocument.create();
   document.registerFontkit(fontkit);
   const font = await document.embedFont(decodeBase64(FONT_BASE64), { subset: true });
-  document.setTitle(`Sharekeeper ciphertexts: ${threshold} of ${keepers.length}`);
+  document.setTitle(`Sharekeeper ciphertext hand-out: ${threshold} of ${count}, one page per sharekeeper`);
   document.setCreator("Sharekeeper offline Shamir tool");
   document.setProducer("pdf-lib / Sharekeeper");
-  document.setSubject("One page per sharekeeper: ciphertext only. No pad, share or seed.");
+  document.setSubject("One page per sharekeeper: ciphertext only. No pad, share or seed. Give each sharekeeper only their own page.");
 
   keepers.forEach((keeper, index) => {
     const ciphertext = ciphertexts[index];
@@ -42,13 +46,16 @@ export async function createKeeperCiphertextPdf({ keepers, ciphertexts, threshol
     const text = (value, x, y, size, color = INK) => page.drawText(value, { x, y, size, font, color });
     const share = String(index + 1).padStart(2, "0");
     text("SHAREKEEPER CIPHERTEXT", 48, 728, 22);
-    text(`SHARE ${share}  |  ${threshold} OF ${keepers.length}  |  20 GROUPS OF 4 LETTERS`, 48, 706, 10.5, TEAL);
+    text(`SHARE ${share}  |  ${threshold} OF ${count}  |  20 GROUPS OF 4 LETTERS`, 48, 706, 10.5, TEAL);
     page.drawLine({ start: { x: 48, y: 694 }, end: { x: 564, y: 694 }, thickness: 0.6, color: RULE });
     text("Sharekeeper", 48, 668, 10, MUTED);
-    text(keeper.name, 48, 650, 14);
+    let nameSize = 14;
+    while (nameSize > 8 && font.widthOfTextAtSize(keeper.name, nameSize) > 516) nameSize -= 0.5;
+    if (font.widthOfTextAtSize(keeper.name, nameSize) > 516) throw new Error("A sharekeeper name is too long for the ciphertext page.");
+    text(keeper.name, 48, 650, nameSize);
     const lines = [
-      "This page holds only your share’s ciphertext. Without the owner’s private pad it",
-      "reveals nothing about the share. Store it safely and keep it exactly as written.",
+      "This page holds only your share’s ciphertext. It is meant to be unusable without",
+      "the owner’s private pad. Store it safely and keep it exactly as written.",
       "On a recovery request made under your agreed release policy, provide all 20 groups.",
     ];
     lines.forEach((line, row) => text(line, 48, 620 - row * 15, 10.5));
@@ -76,7 +83,7 @@ export async function createKeeperCiphertextPdf({ keepers, ciphertexts, threshol
     text("CRC-32/ISO-HDLC (IEEE) of the 80 letters above as plain uppercase text, no spaces.", 48, 152, 9, MUTED);
     text("It detects copying mistakes; it is not proof of authenticity.", 48, 140, 9, MUTED);
     page.drawLine({ start: { x: 48, y: 96 }, end: { x: 564, y: 96 }, thickness: 0.6, color: RULE });
-    text("Sharekeeper.org prototype, not audited. Generated offline in the owner's browser.", 48, 80, 8.5, MUTED);
+    text(`Sharekeeper.org prototype, not audited. Generated offline in the owner's browser. Page ${index + 1} of ${count}.`, 48, 80, 8.5, MUTED);
   });
   return document.save({ useObjectStreams: true });
 }

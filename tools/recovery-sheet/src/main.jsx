@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Check, CheckCircle2, Download, Fingerprint, Lock
 import "@fontsource/source-sans-3/latin-400.css";
 import "@fontsource/source-sans-3/latin-600.css";
 import "@fontsource/source-sans-3/latin-700.css";
-import { blankKeeper, KEEPER_COUNTS, PAD_LENGTH, thresholdOptions } from "../shared/schema.js";
+import { blankKeeper, isValidThreshold, KEEPER_COUNTS, PAD_LENGTH, thresholdOptions } from "../shared/schema.js";
 import { publicNavigationUrls } from "../shared/public-urls.js";
 import { BROWSER_SEED_BITS, generatePadsWithEntropy, groupPad } from "./pads.js";
 import { createEntropyCollector, USER_ENTROPY_TARGET_BITS } from "./entropy.js";
@@ -13,7 +13,7 @@ import { contactErrors } from "./contacts.js";
 import { ciphertextCrc32, decryptCiphertext, encryptPrefixes, firstCipherGroups } from "./cipher.js";
 import { createKeeperCiphertextPdf } from "./keeper-pdf.js";
 import { generateMasterSecret, thresholdSubsets } from "./master-secret.js";
-import { combineMnemonics, splitMasterSecret, wordPrefixes } from "./slip39.js";
+import { combineMnemonics, decodeMnemonic, splitMasterSecret, wordPrefixes } from "./slip39.js";
 import logo from "../assets/logo-with-domain.webp";
 import "./style.css";
 
@@ -84,7 +84,17 @@ function App() {
     const update = () => {
       const next = offlineState();
       setOffline(next);
-      if (!next.ready) setShownShare(-1);
+      if (!next.ready) {
+        setShownShare(-1);
+        if (generationBusy.current) {
+          // Invalidate the pending run: it stops at its next check, issues
+          // nothing, and its finally block wipes the sensitive buffers.
+          generationVersion.current += 1;
+          generationBusy.current = false;
+          setBusy(false);
+          setFailure("A network connection appeared during generation, so it was cancelled. Nothing was issued.");
+        }
+      }
     };
     window.addEventListener("online", update);
     window.addEventListener("offline", update);
@@ -178,6 +188,11 @@ function App() {
     setBusy(true); setFailure("");
     let contribution;
     let masterSecret;
+    const stillOffline = () => {
+      if (SHAMIR && (version !== generationVersion.current || !offlineState().ready)) {
+        throw new Error("A network connection appeared during generation, so it was cancelled. Nothing was issued.");
+      }
+    };
     try {
       const issues = await validatePdfContacts(activeKeepers);
       if (issues.length) throw new Error(issues.map((i) => i.message).join(" "));
@@ -185,8 +200,19 @@ function App() {
       const newPads = await generatePadsWithEntropy(count, contribution);
       let shamir = null;
       if (SHAMIR) {
+        stillOffline();
         masterSecret = await generateMasterSecret(contribution);
+        stillOffline();
+        if (!isValidThreshold(threshold, count)) throw new Error("Only SLIP-39 single-level schemes with 2 ≤ n ≤ m are supported. Nothing was issued.");
         const mnemonics = await splitMasterSecret({ masterSecret, threshold, shareCount: count, crypto: globalThis.crypto });
+        mnemonics.forEach((m, i) => {
+          const d = decodeMnemonic(m);
+          d.value?.fill?.(0);
+          if (d.groupCount !== 1 || d.groupThreshold !== 1 || d.groupIndex !== 0 || d.memberThreshold !== threshold || d.memberIndex !== i || d.wordCount !== 20) {
+            throw new Error("Share check failed: not a single-level 20-word SLIP-39 share. Nothing was issued.");
+          }
+        });
+        stillOffline();
         const subsets = thresholdSubsets(count, threshold);
         for (const subset of subsets) {
           const recovered = await combineMnemonics(subset.map((i) => mnemonics[i]), "", globalThis.crypto);
@@ -194,14 +220,13 @@ function App() {
           recovered.fill(0);
           if (!same) throw new Error("Recovery check failed: a set of shares did not recover the seed. Nothing was issued.");
         }
-        if (threshold > 1) {
-          let refused = false;
-          try { (await combineMnemonics(mnemonics.slice(0, threshold - 1), "", globalThis.crypto)).fill(0); } catch { refused = true; }
-          if (!refused) throw new Error("Recovery check failed: fewer than the threshold of shares were accepted. Nothing was issued.");
-        }
+        let refused = false;
+        try { (await combineMnemonics(mnemonics.slice(0, threshold - 1), "", globalThis.crypto)).fill(0); } catch { refused = true; }
+        if (!refused) throw new Error("Recovery check failed: fewer than the threshold of shares were accepted. Nothing was issued.");
         const prefixes = mnemonics.map((m) => wordPrefixes(m));
         const texts = prefixes.map((p, i) => encryptPrefixes(p, newPads[i]));
         texts.forEach((c, i) => { if (decryptCiphertext(c, newPads[i]) !== prefixes[i]) throw new Error("Cipher check failed. Nothing was issued."); });
+        stillOffline();
         const keeperBytes = await createKeeperCiphertextPdf({ keepers: activeKeepers, ciphertexts: texts, threshold });
         shamir = { mnemonics, texts, keeperBytes, subsetCount: subsets.length };
       }
@@ -211,11 +236,12 @@ function App() {
         ...(shamir ? { cipherGroups: shamir.texts.map(firstCipherGroups), ciphertextCrcs: shamir.texts.map(ciphertextCrc32) } : {}),
       });
       if (version !== generationVersion.current) return;
+      stillOffline();
       const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
       if (shamir) {
         setShares(shamir.mnemonics); setCiphertexts(shamir.texts); setShownShare(-1);
         setKeeperPdfUrl(URL.createObjectURL(new Blob([shamir.keeperBytes], { type: "application/pdf" })));
-        setCheckSummary(`Recovery check passed in memory: ${threshold === 1 ? `each of the ${count} shares alone recovered the seed.` : `${shamir.subsetCount === 1 ? `the only set of ${threshold} shares` : `each of the ${shamir.subsetCount} possible sets of ${threshold} shares`} recovered the seed, and ${threshold - 1} share${threshold - 1 === 1 ? " was" : "s were"} refused.`} Every ciphertext decrypted back to its share.`);
+        setCheckSummary(`Recovery check passed in memory: ${shamir.subsetCount === 1 ? `the only set of ${threshold} shares` : `each of the ${shamir.subsetCount} possible sets of ${threshold} shares`} recovered the seed, and ${threshold - 1} share${threshold - 1 === 1 ? " was" : "s were"} refused. Every ciphertext decrypted back to its share.`);
       }
       movement.current.clear(); setUserBits(0); setSamples(0); setTaps(0);
       setPads(newPads); setPdfUrl(url); setReveal(false); go(4);
@@ -294,10 +320,10 @@ function App() {
                 <span className="count-value">{n} of {count}</span><span>needed</span><span className="count-detail">{count - n === 0 ? "No spare: lose one, lose all" : `${count - n} can be lost`}</span>{threshold === n && <CheckCircle2 size={18} aria-hidden="true" />}
               </button>)}
             </div></fieldset>
-            <p className="technical-note">Any {threshold} of your {count} sharekeepers can recover{threshold < count ? `; up to ${count - threshold} can be lost or refuse` : ""}. {threshold === count ? "With n equal to m, losing any single sharekeeper makes recovery impossible. " : ""}{threshold === 1 ? "With 1 of 2, either sharekeeper’s share alone (with its pad) recovers, so each is a complete backup. " : count === 2 ? "" : "n = 1 is offered only with 2 sharekeepers (1 of 2). "}{SHAMIR ? `The tool creates ${count} SLIP-39 shares, any ${threshold} of which recover${threshold === 1 ? "s" : ""} the seed.` : "The sheet records the choice; it prepares pad and contact fields, not the shares themselves."}</p>
+            <p className="technical-note">Any {threshold} of your {count} sharekeepers can recover{threshold < count ? `; up to ${count - threshold} can be lost or refuse` : ""}. {threshold === count ? "With n equal to m, losing any single sharekeeper makes recovery impossible. " : ""}Only SLIP-39 single-level schemes are offered (one group, 2 ≤ n ≤ m); a threshold of 1 is not, as the spec forbids it with more than one share. {SHAMIR ? `The tool creates ${count} SLIP-39 shares, any ${threshold} of which recover the seed.` : "The sheet records the choice; it prepares pad and contact fields, not the shares themselves."}</p>
             <div className="profile-row"><span><strong>{threshold}-of-{count}</strong> sheet layout</span><span><strong>{PAD_LENGTH} letters</strong> per pad</span><span><strong>US Letter</strong> printable PDF</span></div>
             {SHAMIR
-              ? <div className="plain-note"><LockKeyhole size={19} aria-hidden="true" /><div><h3>This tool creates a new wallet seed.</h3><p>It generates a 128-bit SLIP-39 master secret and its {count} shares (20 words each) in this tab’s memory, encrypts each share with that sharekeeper’s pad, and never stores or sends anything. It does not import an existing seed. Closing or clearing the tab erases everything.</p></div></div>
+              ? <div className="plain-note"><LockKeyhole size={19} aria-hidden="true" /><div><h3>This tool creates a new wallet seed.</h3><p>It generates a 128-bit SLIP-39 master secret and its {count} shares (20 words each) in this tab’s memory, encrypts each share with that sharekeeper’s pad, and never stores or sends anything. It does not import an existing seed. Nothing is saved: closing the tab or clearing the session discards it, although the browser may keep copies in memory until they are overwritten.</p></div></div>
               : <div className="plain-note"><LockKeyhole size={19} aria-hidden="true" /><div><h3>Keep wallet secrets out of this tool.</h3><p>We never ask for a seed phrase, share, or wallet passphrase. This prototype creates pads and a contact sheet, not SLIP-39 shares. To create a seed and shares offline, <a href="./sharekeeper-shamir-offline.html" download="sharekeeper-shamir-offline.html" data-testid="download-shamir-inline">download the offline Shamir tool</a>.</p></div></div>}
             <div className="actions"><button className="primary-button" onClick={() => go(1)} disabled={!cryptoReady} data-testid="button-start">Continue to contacts <ArrowRight size={17} aria-hidden="true" /></button></div>
           </>}
@@ -338,8 +364,8 @@ function App() {
             <div className="contact-review">{activeKeepers.map((k, i) => <article key={k.id} className="review-row"><span className="row-number">{String(i + 1).padStart(2, "0")}</span><div><h3>{k.name || "Contact details missing"}</h3><p>{k.phone || k.website || k.address1 || "Add a contact channel"}</p></div><button className="text-button" disabled={busy} onClick={() => { setKeeperIndex(i); go(1); }} data-testid={`edit-keeper-${i + 1}`}>Edit</button></article>)}</div>
             <div className="mix-summary"><Fingerprint size={20} aria-hidden="true" /><div><strong>Two sources, one local generation</strong><p>{BROWSER_SEED_BITS}-bit browser seed per pad ⊕ {BROWSER_SEED_BITS}-bit block from your {movement.current.count} movement/timing samples (estimated score {Math.min(userBits, 99999)}) → unbiased A–Z selection.</p></div></div>
             {SHAMIR
-              ? <p className="technical-note">Generation creates a 128-bit master secret (browser CSPRNG ⊕ SHA-512 of your input), splits it into {count} SLIP-39 shares with threshold {threshold} ({threshold === 1 ? "two one-share groups with group threshold 1, as SLIP-39 does not allow member threshold 1 with several shares" : "one group"}; extendable, iteration exponent 1, no SLIP-39 passphrase), and checks in memory that every set of {threshold} {threshold === 1 ? "share" : "shares"} recovers it. Each share’s 80-letter plaintext P is the first 4 letters of its 20 words; ciphertext C = (P + K) mod 26 with A = 0. You get two PDFs: your recovery sheet (contacts, pads, first 2 cipher groups and ciphertext CRC32 filled in) and one ciphertext page per sharekeeper. Wallet passphrases stay blank.</p>
-              : <p className="technical-note">The PDF is the published sample sheet, unchanged, with each sharekeeper’s contact details and secret pad K written into its share section. First cipher groups, the eight-digit ciphertext CRC32, and wallet passphrases stay blank for you to fill in; this is not a complete backup.</p>}
+              ? <p className="technical-note">Generation creates a 128-bit master secret (browser CSPRNG ⊕ SHA-512 of your input), splits it into {count} SLIP-39 shares with threshold {threshold} (single-level: one group; extendable, iteration exponent 1, no SLIP-39 passphrase), and checks in memory that every set of {threshold} shares recovers it. Each share’s 80-letter plaintext P is the first 4 letters of its 20 words; ciphertext C = (P + K) mod 26 with A = 0. You get two PDFs: your one unified recovery sheet for all sharekeepers, as 3 identical copies on 3 pages (contacts, pads, first 2 cipher groups and ciphertext CRC32 filled in), and a hand-out file with one ciphertext page per sharekeeper. Wallet passphrases stay blank.</p>
+              : <p className="technical-note">The PDF holds 3 identical copies of one sheet, one per page. Each is the published sample sheet, unchanged, with each sharekeeper’s contact details and secret pad K written into its share section. First cipher groups, the eight-digit ciphertext CRC32, and wallet passphrases stay blank for you to fill in; this is not a complete backup.</p>}
             <div className="acknowledgments">{(SHAMIR ? [
               "I understand this is an unaudited prototype and will test recovery offline, with a small amount first, before relying on it.",
               "I will keep my recovery sheet and the plaintext shares private. Each sharekeeper receives only their own ciphertext page.",
@@ -353,27 +379,27 @@ function App() {
             <p className="eyebrow">Ready / Private documents</p>
             <h2 id="step-heading" tabIndex="-1" ref={headingRef}>Your seed and {count} shares are ready.</h2>
             <p className="subheading" data-testid="check-summary">{checkSummary}</p>
-            <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Your recovery sheet</h3><p>{threshold} of {count} · contacts, pads, first 2 cipher groups, ciphertext CRC32 · US Letter</p><span>Contains the pads. Keep it private; never give it to a sharekeeper.</span></div></div>
+            <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Your recovery sheet</h3><p>One unified sheet for all {count} sharekeepers, 3 identical copies (3 pages) · {threshold} of {count} · contacts, pads, first 2 cipher groups, ciphertext CRC32 · US Letter</p><span>Contains the pads. Keep it private; never give it to a sharekeeper.</span></div></div>
             <div className="actions"><a className="primary-button" href={pdfUrl} download="sharekeeper-recovery-sheet-private.pdf" data-testid="download-pdf"><Download size={18} aria-hidden="true" /> Download recovery sheet</a></div>
-            <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Sharekeeper ciphertext pages</h3><p>One page per sharekeeper · 20 groups of 4 letters · CRC32</p><span>Print and give each sharekeeper only their own page.</span></div></div>
-            <div className="actions"><a className="secondary-button" href={keeperPdfUrl} download="sharekeeper-ciphertexts.pdf" data-testid="download-ciphertexts"><Download size={18} aria-hidden="true" /> Download ciphertext pages</a></div>
+            <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Sharekeeper hand-out pages</h3><p>One PDF · one page per sharekeeper · their 20 groups of 4 letters and CRC32</p><span>Print it and give each sharekeeper only their own page. Don’t send the file itself to anyone: it holds every sharekeeper’s ciphertext.</span></div></div>
+            <div className="actions"><a className="secondary-button" href={keeperPdfUrl} download="sharekeeper-ciphertext-handout.pdf" data-testid="download-ciphertexts"><Download size={18} aria-hidden="true" /> Download hand-out pages</a></div>
             <div className="contact-review">{activeKeepers.map((k, i) => <article key={k.id} className="review-row"><span className="row-number">{String(i + 1).padStart(2, "0")}</span><div><h3>{k.name}</h3><p data-testid={`cipher-summary-${i + 1}`}>First groups {ciphertexts[i]?.slice(0, 4)} {ciphertexts[i]?.slice(4, 8)} · CRC32 {ciphertexts[i] ? ciphertextCrc32(ciphertexts[i]) : ""}</p></div></article>)}</div>
             <div className="secret-section"><h3>Plaintext shares</h3>
-              <p className="technical-note">These are the {count} SLIP-39 shares; any {threshold} {threshold === 1 ? "restores" : "restore"} the seed in a wallet that supports SLIP-39 recovery. They exist only on this screen and are not in either PDF. Show one at a time, only where no camera or person can see the screen.</p>
+              <p className="technical-note">These are the {count} SLIP-39 shares; any {threshold} restore the seed in a wallet that supports SLIP-39 recovery. They exist only on this screen and are not in either PDF. Show one at a time, only where no camera or person can see the screen.</p>
               <div className="share-buttons">{shares.map((_, i) => <button key={i} type="button" className="text-button" disabled={offlineBlocked} aria-expanded={shownShare === i} onClick={() => setShownShare(shownShare === i ? -1 : i)} data-testid={`toggle-share-${i + 1}`}>{shownShare === i ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}{shownShare === i ? `Hide share ${String(i + 1).padStart(2, "0")}` : `Show share ${String(i + 1).padStart(2, "0")}`}</button>)}</div>
               {shownShare >= 0 && !offlineBlocked && <article className="share-words"><h3>Share {String(shownShare + 1).padStart(2, "0")} · {activeKeepers[shownShare]?.name}</h3><ol data-testid={`share-words-${shownShare + 1}`}>{shares[shownShare].split(" ").map((word, w) => <li key={w}>{word}</li>)}</ol></article>}
             </div>
             <div className="secret-section"><button className="text-button" aria-expanded={reveal} onClick={() => setReveal(!reveal)} data-testid="toggle-pads">{reveal ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}{reveal ? "Hide pads on screen" : "Show pads on screen"}</button>
               {reveal && <div className="pad-list">{pads.map((pad, i) => <article key={i}><h3>Sharekeeper {i + 1} · Secret pad K</h3><p className="pad-text" data-testid={`pad-${i + 1}`}>{groupPad(pad)}</p></article>)}</div>}
             </div>
-            <div className="plain-note"><ShieldCheck size={20} aria-hidden="true" /><div><h3>Before relying on it.</h3><p>Restore the wallet from {threshold === 1 ? "one share" : `${threshold} shares`} on an offline device and confirm it shows the addresses you expect, then decrypt one ciphertext page with its pad by hand. Fill in wallet passphrases on paper only. Clear this session when done; nothing is saved.</p></div></div>
+            <div className="plain-note"><ShieldCheck size={20} aria-hidden="true" /><div><h3>Before relying on it.</h3><p>Restore the wallet from {threshold} shares on an offline device and confirm it shows the addresses you expect, then decrypt one ciphertext page with its pad by hand. Fill in wallet passphrases on paper only. Clear this session when done; nothing is saved.</p></div></div>
             <button className="secondary-button new-sheet" onClick={() => setClearDialog(true)} data-testid="button-new-sheet">Clear session and start again</button>
           </>}
           {stage === 4 && !SHAMIR && <>
             <p className="eyebrow">Ready / Private document</p>
             <h2 id="step-heading" tabIndex="-1" ref={headingRef}>Your recovery sheet is ready.</h2>
             <p className="subheading">Your {count} independently generated pads are in the PDF. Download the same sheet again without changing its keys.</p>
-            <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Sharekeeper recovery sheet</h3><p>{count} sharekeepers · 80-letter pads · US Letter PDF</p><span>Contains secrets. Store and print privately.</span></div></div>
+            <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Sharekeeper recovery sheet</h3><p>{count} sharekeepers · 80-letter pads · 3 identical copies (3 pages) · US Letter PDF</p><span>Contains secrets. Store and print privately.</span></div></div>
             <div className="actions"><a className="primary-button" href={pdfUrl} download="sharekeeper-recovery-sheet-private.pdf" data-testid="download-pdf"><Download size={18} aria-hidden="true" /> Download private PDF</a></div>
             <p className="technical-note">Print on US Letter at 100% (actual size). Do not use “fit to page” or shrink further; the contact lines and pad cells are small.</p>
             <div className="secret-section"><button className="text-button" aria-expanded={reveal} onClick={() => setReveal(!reveal)} data-testid="toggle-pads">{reveal ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}{reveal ? "Hide pads on screen" : "Show pads on screen"}</button>

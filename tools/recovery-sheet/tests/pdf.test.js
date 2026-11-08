@@ -13,6 +13,7 @@ import {
   PAD_CELL,
   PAD_LETTER_SIZE,
   PDF_CONTACT_FRAME,
+  SHEET_COPIES,
   TEMPLATE_CONTACT_ROWS,
   validatePdfContacts,
 } from "../src/pdf.js";
@@ -140,8 +141,19 @@ test("3/4/5 exports reproduce the template page unchanged and only fill contacts
     const bytes = await createRecoveryPdf(input);
     assert.ok(bytes instanceof Uint8Array);
     const document = await PDFDocument.load(bytes);
-    assert.equal(document.getPageCount(), 1);
-    const [page] = document.getPages();
+    assert.equal(document.getPageCount(), SHEET_COPIES);
+    assert.equal(SHEET_COPIES, 3);
+    const [page, ...copies] = document.getPages();
+    // Every copy is the same unchanged template page with the same filled values, in the same places.
+    const firstRuns = overlayTextRuns(document, page, contentStreams(document, page).at(-1));
+    for (const copy of copies) {
+      assert.equal(copy.getWidth(), 612);
+      assert.equal(copy.getHeight(), 792);
+      assert.notEqual(copy.ref.toString(), page.ref.toString());
+      assert.deepEqual(overlayTextRuns(document, copy, contentStreams(document, copy).at(-1)), firstRuns);
+      assert.deepEqual(sheetStreams(document, copy.node.Resources()), sheetStreams(document, page.node.Resources()));
+      assert.equal(contentStreams(document, copy).length, contentStreams(document, page).length);
+    }
     assert.equal(page.getWidth(), 612);
     assert.equal(page.getHeight(), 792);
     assert.equal(document.getTitle(), `Sharekeeper SLIP-39 recovery sheet: ${thresholdFor(count)} of ${count}`);
@@ -241,8 +253,8 @@ test("every n-of-m choice changes only the header digits and title", async () =>
   }
   await assert.rejects(createRecoveryPdf({ ...fixture(3), threshold: 4 }), /one of 2, 3 for 3/);
   await assert.rejects(createRecoveryPdf({ ...fixture(3), threshold: 1 }), /one of 2, 3 for 3/);
-  await assert.rejects(createRecoveryPdf({ ...fixture(2), threshold: 0 }), /one of 1, 2 for 2/);
-  assert.deepEqual(thresholdOptions(2), [1, 2]);
+  await assert.rejects(createRecoveryPdf({ ...fixture(2), threshold: 1 }), /one of 2 for 2/);
+  assert.deepEqual(thresholdOptions(2), [2]);
   assert.deepEqual(thresholdOptions(3), [2, 3]);
   assert.deepEqual(thresholdOptions(5), [2, 3, 4, 5]);
 });

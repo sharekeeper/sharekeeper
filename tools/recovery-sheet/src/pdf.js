@@ -51,6 +51,8 @@ export const PDF_CONTACT_FRAME = Object.freeze({
 // groups 78.8551pt apart; first cell bottom-left at (371, 1294.78).
 export const PAD_CELL = Object.freeze({ x: 371, y: 1294.78, width: 16, height: 26, groupPitch: 78.8551, rowPitch: 46 });
 export const PAD_LETTER_SIZE = 15;
+/** The unified recovery-sheet PDF holds this many identical copies, one per page. */
+export const SHEET_COPIES = 3;
 // FIRST 2 CIPHER GROUPS: two groups of four 14.2 x 26pt cells at x=201 and 269.
 export const PREFIX_CELL = Object.freeze({ xs: [201, 269], y: 1186.78, width: 14.2, height: 26 });
 export const PREFIX_LETTER_SIZE = 13;
@@ -347,8 +349,15 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary, thresho
   }
 
   const { template, matrix } = await templatePage(keepers.length, threshold);
-  const [page] = await document.copyPages(template, [0]);
-  document.addPage(page);
+  // One unified document: SHEET_COPIES identical copies of the same filled
+  // sheet, one per page. Each page gets its own copy of the template page so
+  // overlays are never drawn twice onto a shared page object.
+  const pages = [];
+  for (let copy = 0; copy < SHEET_COPIES; copy += 1) {
+    const [page] = await document.copyPages(template, [0]);
+    document.addPage(page);
+    pages.push(page);
+  }
   document.setTitle(`Sharekeeper SLIP-39 recovery sheet: ${threshold} of ${keepers.length}`);
   document.setSubject(entropySummary === undefined
     ? "Private recovery sheet with 80-letter pads. Unaudited prototype."
@@ -357,16 +366,18 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary, thresho
   document.setProducer("pdf-lib / Sharekeeper");
   document.setKeywords(["Sharekeeper", "recovery sheet", "private pads", "prototype"]);
 
-  page.pushOperators(pushGraphicsState(), concatTransformationMatrix(...matrix));
-  keepers.forEach((_, index) => {
-    const offset = index * KEEPER_STRIDE;
-    drawContacts(page, font, layouts[index], offset);
-    drawPad(page, font, pads[index], offset);
-    if (cipherGroups) {
-      drawCipherGroups(page, font, cipherGroups[index], offset);
-      drawCrc(page, font, ciphertextCrcs[index], offset);
-    }
-  });
-  page.pushOperators(popGraphicsState());
+  for (const page of pages) {
+    page.pushOperators(pushGraphicsState(), concatTransformationMatrix(...matrix));
+    keepers.forEach((_, index) => {
+      const offset = index * KEEPER_STRIDE;
+      drawContacts(page, font, layouts[index], offset);
+      drawPad(page, font, pads[index], offset);
+      if (cipherGroups) {
+        drawCipherGroups(page, font, cipherGroups[index], offset);
+        drawCrc(page, font, ciphertextCrcs[index], offset);
+      }
+    });
+    page.pushOperators(popGraphicsState());
+  }
   return document.save({ useObjectStreams: true });
 }

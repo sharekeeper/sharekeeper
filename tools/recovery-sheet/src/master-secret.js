@@ -20,15 +20,24 @@ export async function generateMasterSecret(contribution, cryptoApi = globalThis.
     throw new TypeError("A non-empty movement contribution is required.");
   }
   const input = new Uint8Array(DOMAIN.length + contribution.length);
-  input.set(DOMAIN, 0);
-  input.set(contribution, DOMAIN.length);
-  const digest = new Uint8Array(await cryptoApi.subtle.digest("SHA-512", input));
-  input.fill(0);
   const secret = new Uint8Array(MASTER_SECRET_BYTES);
-  cryptoApi.getRandomValues(secret);
-  for (let index = 0; index < MASTER_SECRET_BYTES; index += 1) secret[index] ^= digest[index];
-  digest.fill(0);
-  return secret;
+  let digest;
+  let issued = false;
+  try {
+    input.set(DOMAIN, 0);
+    input.set(contribution, DOMAIN.length);
+    digest = new Uint8Array(await cryptoApi.subtle.digest("SHA-512", input));
+    input.fill(0);
+    cryptoApi.getRandomValues(secret);
+    if (secret.every((byte) => byte === secret[0])) throw new Error("The browser random generator returned a constant block. No secret was generated.");
+    for (let index = 0; index < MASTER_SECRET_BYTES; index += 1) secret[index] ^= digest[index];
+    issued = true;
+    return secret;
+  } finally {
+    input.fill(0);
+    digest?.fill(0);
+    if (!issued) secret.fill(0);
+  }
 }
 
 /** All k-element index subsets of 0..m-1, in lexicographic order. */

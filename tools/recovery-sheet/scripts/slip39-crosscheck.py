@@ -9,8 +9,8 @@ Run from tools/recovery-sheet:
 
 Checks:
   1. Deterministic: for each case, Python and JS split the same secret with the
-     same injected byte stream (SHA-256(seed || counter) blocks), for T-of-N
-     single-group splits and for 1-of-2 (two 1-of-1 groups, group threshold 1). Their
+     same injected byte stream (SHA-256(seed || counter) blocks), for
+     single-level T-of-N splits (one group, 2 <= T <= N <= 16). Their
      mnemonics must be identical, Python must combine the JS mnemonics and JS
      must combine the Python mnemonics (sampled threshold-subsets), with and
      without the right passphrase behaving identically.
@@ -108,13 +108,11 @@ def node(jobs):
 def py_split(secret, t, n, passphrase, e, ext, rng):
     shamir.RANDOM_BYTES = rng
     try:
-        # 1-of-n (n = 2 only in JS) is n groups of 1-of-1 with group threshold 1.
-        layout = [(1, 1)] * n if t == 1 else [(t, n)]
-        groups = shamir_mnemonic.generate_mnemonics(1, layout, secret, passphrase.encode("ascii"), ext, e)
+        groups = shamir_mnemonic.generate_mnemonics(1, [(t, n)], secret, passphrase.encode("ascii"), ext, e)
     finally:
         shamir.RANDOM_BYTES = secrets.token_bytes
-    assert len(groups) == len(layout)
-    return [m for group in groups for m in group]
+    assert len(groups) == 1
+    return groups[0]
 
 
 def py_combine(mnemonics, passphrase):
@@ -146,9 +144,6 @@ def det_cases():
         ("256-bit all-0xff secret 2-of-5 non-extendable", bytes([255]) * 32, 2, 5, "TREZOR", 1, False),
         ("128-bit 5-of-5 e=0", 16, 5, 5, "", 0, True),
         ("128-bit 2-of-2 non-extendable e=0", 16, 2, 2, "", 0, False),
-        ("128-bit 1-of-2 default params", 16, 1, 2, "", 1, True),
-        ("256-bit 1-of-2 TREZOR e=0", 32, 1, 2, "TREZOR", 0, True),
-        ("128-bit 1-of-2 non-extendable e=2", 16, 1, 2, "", 2, False),
     ]
     for i, (name, sec, t, n, pw, e, ext) in enumerate(spec):
         seed = hashlib.sha256(b"sharekeeper slip39 crosscheck seed %d" % i).digest()
@@ -205,10 +200,7 @@ def main():
     # 2. Random fuzz, both directions.
     def rand_params():
         n = rnd.randint(2, 16)
-        t = rnd.randint(2, n)
-        if rnd.random() < 0.15:
-            t, n = 1, 2
-        return dict(t=t, n=n, length=rnd.choice([16, 32]), e=rnd.choice([0, 0, 1, 2]),
+        return dict(t=rnd.randint(2, n), n=n, length=rnd.choice([16, 32]), e=rnd.choice([0, 0, 1, 2]),
                     ext=rnd.choice([True, False]),
                     pw=rnd.choice(["", "TREZOR", "".join(rnd.choice(PRINTABLE) for _ in range(rnd.randint(1, 40)))]))
 

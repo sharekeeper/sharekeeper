@@ -11,13 +11,14 @@ export function thresholdFor(count) {
   return Math.min(THRESHOLD, count);
 }
 /**
- * Thresholds a user can choose for m sharekeepers: n = m − 1 is always offered,
- * and otherwise 2 to m. So 2 sharekeepers allow 1 of 2 and 2 of 2; 3 to 5 allow
- * 2 to m. (SLIP-39 encodes 1 of 2 as two one-share groups, group threshold 1.)
+ * Thresholds a user can choose for m sharekeepers: 2 to m. Only SLIP-39
+ * single-level schemes are offered (one group, GT = 1, G = 1, 2 ≤ T ≤ N); the
+ * spec forbids member threshold 1 with more than one share, and multi-group
+ * workarounds such as 1 of 2 are deliberately not offered.
  */
 export function thresholdOptions(count) {
   if (!Number.isInteger(count) || count < 2) return [];
-  return Array.from({ length: count }, (_, index) => index + 1).filter((n) => n >= 2 || n === count - 1);
+  return Array.from({ length: count - 1 }, (_, index) => index + 2);
 }
 export function isValidThreshold(threshold, count) {
   return thresholdOptions(count).includes(threshold);
