@@ -39,7 +39,7 @@ export function groupPad(pad) {
 }
 
 /**
- * Generate a fresh, independently sampled 80-letter pad for each of 3–5 keepers.
+ * Generate a fresh, independently sampled 80-letter pad for each of 2–5 keepers.
  *
  * This random-only primitive is retained for tests and standalone callers.
  * The recovery-sheet UI uses generatePadsWithEntropy instead. Production
@@ -52,8 +52,8 @@ export function groupPad(pad) {
  * Callers must not log, persist, or transmit these pads.
  */
 export function generatePads(count, cryptoSource = globalThis.crypto) {
-  if (!Number.isInteger(count) || count < 3 || count > 5) {
-    throw new RangeError("Keeper count must be an integer from 3 to 5.");
+  if (!Number.isInteger(count) || count < 2 || count > 5) {
+    throw new RangeError("Keeper count must be an integer from 2 to 5.");
   }
   if (
     cryptoSource == null ||
@@ -152,8 +152,8 @@ export async function generatePadsWithEntropy(
   contributionBytes,
   cryptoSource = globalThis.crypto,
 ) {
-  if (!Number.isInteger(count) || count < 3 || count > 5) {
-    throw new RangeError("Keeper count must be an integer from 3 to 5.");
+  if (!Number.isInteger(count) || count < 2 || count > 5) {
+    throw new RangeError("Keeper count must be an integer from 2 to 5.");
   }
   if (
     !(contributionBytes instanceof Uint8Array) ||

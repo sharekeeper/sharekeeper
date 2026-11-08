@@ -23,8 +23,8 @@ function constantSource(byte = 0) {
   };
 }
 
-test("generates exactly 3, 4, or 5 full-length A–Z pads using Web Crypto", () => {
-  for (const count of [3, 4, 5]) {
+test("generates exactly 2, 3, 4, or 5 full-length A–Z pads using Web Crypto", () => {
+  for (const count of [2, 3, 4, 5]) {
     const pads = generatePads(count, webcrypto);
     assert.equal(pads.length, count);
     for (const pad of pads) {
@@ -107,7 +107,7 @@ test("rejects invalid counts before requesting randomness", () => {
     "3",
     true,
     0,
-    2,
+    1,
     6,
     -3,
     3.5,
@@ -118,7 +118,7 @@ test("rejects invalid counts before requesting randomness", () => {
   ]) {
     assert.throws(() => generatePads(count, source), {
       name: "RangeError",
-      message: /integer from 3 to 5/,
+      message: /integer from 2 to 5/,
     });
   }
   assert.equal(source.calls, 0);
@@ -233,7 +233,7 @@ async function referencePads(count, input, seedFor) {
 
 test("mixed API draws one fresh 1600-bit (200-byte) browser seed per keeper", async () => {
   assert.equal(BROWSER_SEED_BITS, 1600);
-  for (const count of [3, 4, 5]) {
+  for (const count of [2, 3, 4, 5]) {
     const sizes = [];
     const source = {
       subtle: webcrypto.subtle,
@@ -292,8 +292,8 @@ test("mixed API changes output when contribution or random seed changes", async 
 
 test("mixed API rejects invalid counts before hashing or requesting randomness", async () => {
   const source = mixedSource();
-  for (const count of [undefined, null, "3", 2, 6, 3.5, NaN, Infinity]) {
-    await assert.rejects(generatePadsWithEntropy(count, contribution(), source), /integer from 3 to 5/);
+  for (const count of [undefined, null, "3", 1, 6, 3.5, NaN, Infinity]) {
+    await assert.rejects(generatePadsWithEntropy(count, contribution(), source), /integer from 2 to 5/);
   }
   assert.equal(source.calls, 0);
 });

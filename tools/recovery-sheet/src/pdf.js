@@ -4,7 +4,7 @@ import {
 } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { FONT_BASE64, TEMPLATE_BASE64 } from "./pdf-assets.js";
-import { KEEPER_COUNTS, PAD_LENGTH } from "../shared/schema.js";
+import { KEEPER_COUNTS, PAD_LENGTH, thresholdFor } from "../shared/schema.js";
 
 // The bundled template is the supplied sample PDF, byte for byte. Its page is
 // reproduced unchanged; the generator only writes values into blank fields.
@@ -60,7 +60,7 @@ function decodeBase64(base64) {
 
 function requireKeepers(keepers) {
   if (!Array.isArray(keepers) || !KEEPER_COUNTS.includes(keepers.length)) {
-    throw new Error("PDF export requires exactly 3, 4, or 5 keepers.");
+    throw new Error("PDF export requires exactly 2, 3, 4, or 5 keepers.");
   }
 }
 
@@ -234,15 +234,15 @@ export function locateTemplateSheet(template) {
 }
 
 /**
- * Load the untouched template. For 3-of-3 and 3-of-4 sheets only the share
- * count digit in the header literal changes, in the template's own font.
+ * Load the untouched template. For 2-of-2, 3-of-3 and 3-of-4 sheets only the
+ * threshold and share-count digits in the header literal change, in the template's own font.
  */
 async function templatePage(count) {
   const template = await PDFDocument.load(decodeBase64(TEMPLATE_BASE64), { updateMetadata: false });
   const sheet = locateTemplateSheet(template);
   if (count !== 5) {
     if (sheet.text.split(HEADER_LITERAL).length - 1 !== 1) throw new Error("Template header changed; review before export.");
-    const updated = sheet.text.replace(HEADER_LITERAL, `(3 OF ${count}  |`);
+    const updated = sheet.text.replace(HEADER_LITERAL, `(${thresholdFor(count)} OF ${count}  |`);
     const fresh = template.context.flateStream(Uint8Array.from(updated, (character) => character.charCodeAt(0)));
     for (const [key, value] of sheet.stream.dict.entries()) {
       if (!["/Filter", "/Length", "/DecodeParms"].includes(key.toString())) fresh.dict.set(key, value);
@@ -304,7 +304,7 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary }) {
   const { template, matrix } = await templatePage(keepers.length);
   const [page] = await document.copyPages(template, [0]);
   document.addPage(page);
-  document.setTitle(`Sharekeeper SLIP-39 recovery sheet: 3 of ${keepers.length}`);
+  document.setTitle(`Sharekeeper SLIP-39 recovery sheet: ${thresholdFor(keepers.length)} of ${keepers.length}`);
   document.setSubject(entropySummary === undefined
     ? "Private recovery sheet with 80-letter pads. Unaudited prototype."
     : "Private recovery sheet with 80-letter pads (1600-bit browser seed per pad XOR 1600-bit user-input block). Unaudited prototype.");

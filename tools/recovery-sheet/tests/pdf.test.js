@@ -16,7 +16,7 @@ import {
   TEMPLATE_CONTACT_ROWS,
   validatePdfContacts,
 } from "../src/pdf.js";
-import { blankKeeper } from "../shared/schema.js";
+import { blankKeeper, thresholdFor } from "../shared/schema.js";
 
 // Deliberately obvious, deterministic fixtures; never real keeper/pad material.
 function fixture(count = 3) {
@@ -133,7 +133,7 @@ test("the template's contact rows and pad cells are where the generator writes",
 
 test("3/4/5 exports reproduce the template page unchanged and only fill contacts and pads", async () => {
   const original = await sourceStream();
-  for (const count of [3, 4, 5]) {
+  for (const count of [2, 3, 4, 5]) {
     const input = fixture(count);
     input.keepers[0].reference = "  Exact CASE / ref.  ";
     input.keepers[0].website = "https://gpy.invalid/gpy";
@@ -144,7 +144,7 @@ test("3/4/5 exports reproduce the template page unchanged and only fill contacts
     const [page] = document.getPages();
     assert.equal(page.getWidth(), 612);
     assert.equal(page.getHeight(), 792);
-    assert.equal(document.getTitle(), `Sharekeeper SLIP-39 recovery sheet: 3 of ${count}`);
+    assert.equal(document.getTitle(), `Sharekeeper SLIP-39 recovery sheet: ${thresholdFor(count)} of ${count}`);
     // The original application catalog and Content Credentials are not inherited.
     assert.equal(document.catalog.get(PDFName.of("AF")), undefined);
     assert.equal(document.catalog.get(PDFName.of("Names")), undefined);
@@ -152,7 +152,7 @@ test("3/4/5 exports reproduce the template page unchanged and only fill contacts
     const templateStreams = sheetStreams(document, page.node.Resources());
     assert.equal(templateStreams.length, 1);
     assert.equal(streams.some((stream) => stream.includes("SHAREKEEPER SLIP-39 RECOVERY SHEET")), false);
-    assert.equal(templateStreams[0], original.replace("(3 OF 5  |", `(3 OF ${count}  |`));
+    assert.equal(templateStreams[0], original.replace("(3 OF 5  |", `(${thresholdFor(count)} OF ${count}  |`));
     const overlay = streams.at(-1);
     // Overlay values are drawn in the sheet's own coordinates through the
     // template's form matrix, so each value lands in its scaled box.
@@ -227,7 +227,8 @@ test("long contacts fail before export rather than silently truncating", async (
 });
 
 test("rejects invalid keeper counts and malformed or mismatched pads", async () => {
-  await assert.rejects(createRecoveryPdf(fixture(2)), /3, 4, or 5/);
+  await assert.rejects(createRecoveryPdf(fixture(1)), /2, 3, 4, or 5/);
+  await assert.rejects(createRecoveryPdf(fixture(6)), /2, 3, 4, or 5/);
   await assert.rejects(createRecoveryPdf({ ...fixture(), pads: ["A".repeat(80)] }), /80-letter/);
   for (const pad of ["A".repeat(79), "A".repeat(81), "a".repeat(80), `${"A".repeat(79)}0`, ""]) {
     const input = fixture();
