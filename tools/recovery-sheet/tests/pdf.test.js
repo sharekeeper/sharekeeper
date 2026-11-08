@@ -162,7 +162,8 @@ test("3/4/5 exports reproduce the template page unchanged and only fill contacts
         assert.ok(run.size >= PDF_CONTACT_FRAME.minSize && run.size <= PDF_CONTACT_FRAME.maxSize);
         assert.ok(run.x + bounds.minX >= row.ruleStart + PDF_CONTACT_FRAME.textInset - 1e-6);
         assert.ok(run.x + bounds.maxX <= 335 - PDF_CONTACT_FRAME.rightInset + 1e-6);
-        assert.ok(run.y + bounds.maxY < row.ruleY - slot * 200 + PDF_CONTACT_FRAME.rowPitch - PDF_CONTACT_FRAME.ruleThickness / 2);
+        assert.ok(run.y + bounds.maxY <= row.ruleY - slot * 200 + PDF_CONTACT_FRAME.inkAboveRule + 1e-6);
+        assert.ok(run.y + bounds.minY >= row.ruleY - slot * 200 - PDF_CONTACT_FRAME.inkBelowRule - 1e-6);
       });
     });
   }
@@ -232,6 +233,25 @@ test("contact fit uses actual ink, stays on one line and never elides", async ()
   assert.equal(fitPdfContact("ÁÉÎÖÜ gpy Example Title Company", font, name).size, 11);
   assert.equal(fitPdfContact("A\nB", font, name), null);
   assert.equal(fitPdfContact("X".repeat(80), font, region), null);
+});
+
+test("adjacent rows cannot overlap, even with deep descenders and tall accents", async () => {
+  const document = await PDFDocument.create();
+  document.registerFontkit(fontkit);
+  const font = await document.embedFont(Uint8Array.from(atob(FONT_BASE64), (character) => character.charCodeAt(0)));
+  const frame = PDF_CONTACT_FRAME;
+  assert.ok(frame.rowPitch - frame.inkBelowRule > frame.inkAboveRule);
+  const samples = ["gpy jÿ Example", "\u06B8".repeat(20), "\u1EAA".repeat(12), "ÁÉÎÖÜ gpy", "Ẫ ǅ ḯ ỹ ŷ ẘ"];
+  for (const row of TEMPLATE_CONTACT_ROWS) {
+    for (const value of samples) {
+      if ([...value].some((character) => !font.getCharacterSet().includes(character.codePointAt(0)))) continue;
+      const fit = fitPdfContact(value, font, row);
+      if (!fit) continue;
+      const bounds = measurePdfGlyphBounds(value, fit.size);
+      assert.ok(fit.y + bounds.minY >= row.ruleY - frame.inkBelowRule - 1e-9, `${row.label}: ${value} bottom`);
+      assert.ok(fit.y + bounds.maxY <= row.ruleY + frame.inkAboveRule + 1e-9, `${row.label}: ${value} top`);
+    }
+  }
 });
 
 test("PDF generation never uses fetch", async () => {

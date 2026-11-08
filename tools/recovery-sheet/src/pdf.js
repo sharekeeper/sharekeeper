@@ -34,6 +34,11 @@ export const PDF_CONTACT_FRAME = Object.freeze({
   baselineAboveRule: 2,
   maxSize: 11,
   minSize: 7,
+  // Each row's ink must stay within [rule - 1, rule + 13]. Adjacent rows are
+  // 14.5pt apart, so neighbouring bands are separated by 0.5pt and can never
+  // overlap, whatever accents or descenders a supported script uses.
+  inkBelowRule: 1,
+  inkAboveRule: 13,
 });
 // Pad cells: 16 x 26pt, ten groups of four per row, two rows 46pt apart,
 // groups 78.8551pt apart; first cell bottom-left at (371, 1294.78).
@@ -82,19 +87,19 @@ export function measurePdfGlyphBounds(text, size) {
 /**
  * Fit one value on its template row: a single line, largest size from 11pt
  * down to 7pt whose actual ink stays between the rule start and x=335 and
- * below the next row up. Returns null instead of truncating or wrapping.
+ * inside the row band, so it cannot touch the rows above or below. Returns null instead of truncating or wrapping.
  */
 export function fitPdfContact(text, font, row) {
   const frame = PDF_CONTACT_FRAME;
   if (text === "") return { size: frame.maxSize, x: row.ruleStart + frame.textInset, y: row.ruleY + frame.baselineAboveRule };
   if (/[\r\n]/.test(text)) return null;
   const width = RULE_END - frame.rightInset - (row.ruleStart + frame.textInset);
-  // Highest permitted ink: just below the rule of the row above.
-  const ceiling = frame.rowPitch - frame.ruleThickness / 2 - 0.5 - frame.baselineAboveRule;
+  const ceiling = frame.inkAboveRule - frame.baselineAboveRule;
+  const floor = -(frame.inkBelowRule + frame.baselineAboveRule);
   for (let size = frame.maxSize; size >= frame.minSize; size -= 0.25) {
     if (font.widthOfTextAtSize(text, size) > width) continue;
     const bounds = measurePdfGlyphBounds(text, size);
-    if (bounds.maxX - Math.min(0, bounds.minX) > width || bounds.maxY > ceiling) continue;
+    if (bounds.maxX - Math.min(0, bounds.minX) > width || bounds.maxY > ceiling || bounds.minY < floor) continue;
     return { size, x: row.ruleStart + frame.textInset - Math.min(0, bounds.minX), y: row.ruleY + frame.baselineAboveRule, bounds };
   }
   return null;
