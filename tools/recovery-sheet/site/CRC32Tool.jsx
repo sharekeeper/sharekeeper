@@ -100,7 +100,7 @@ export default function CRC32Tool() {
     ? (normalizedExpected === result.hex ? "match" : "mismatch")
     : null;
 
-  return <section className="crc-tool container" id="crc32-calculator" aria-labelledby="crc32-heading">
+  return <section className="crc-tool" id="crc32-calculator" aria-labelledby="crc32-heading">
     <div className="crc-tool-copy">
       <div className="crc-tool-intro">
       <span className="crc-kicker"><FileCheck2 size={18} aria-hidden="true" />Local checksum utility</span>
