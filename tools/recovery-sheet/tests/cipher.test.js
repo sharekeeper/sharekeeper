@@ -102,7 +102,7 @@ function runs(document, page, overlay) {
   const maps = new Map();
   return [...overlay.matchAll(/BT\n([\s\S]*?)\nET/g)].map(([, block]) => {
     const [, name, size] = block.match(/\/(\S+) ([\d.]+) Tf/);
-    const [, x, y] = block.match(/1 0 0 1 ([\d.-]+) ([\d.-]+) Tm/);
+    const [, x, y] = block.match(/([-\d.e]+) ([-\d.e]+) Tm/);
     const [, encoded] = block.match(/<([0-9A-F]*)> Tj/);
     if (!maps.has(name)) {
       const cmap = new TextDecoder().decode(decodePDFRawStream(fonts.lookup(PDFName.of(name)).lookup(PDFName.of("ToUnicode"))).decode());

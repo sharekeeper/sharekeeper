@@ -14,6 +14,8 @@ import {
   PAD_LETTER_SIZE,
   PDF_CONTACT_FRAME,
   SHEET_COPIES,
+  COPY_LABEL,
+  copyLabel,
   TEMPLATE_CONTACT_ROWS,
   validatePdfContacts,
 } from "../src/pdf.js";
@@ -54,7 +56,9 @@ function overlayTextRuns(document, page, overlay) {
   const maps = new Map();
   return [...overlay.matchAll(/BT\n([\s\S]*?)\nET/g)].map(([, block]) => {
     const [, name, rawSize] = block.match(/\/(\S+) ([\d.]+) Tf/);
-    const [, rawX, rawY] = block.match(/1 0 0 1 ([\d.-]+) ([\d.-]+) Tm/);
+    const [, a, b, c, d, rawX, rawY] = block.match(/([-\d.e]+) ([-\d.e]+) ([-\d.e]+) ([-\d.e]+) ([-\d.e]+) ([-\d.e]+) Tm/);
+    const rotated = Math.abs(Number(a)) < 1e-9 && Number(b) === 1 && Number(c) === -1 && Math.abs(Number(d)) < 1e-9;
+    assert.ok(rotated || (a === "1" && b === "0" && c === "0" && d === "1"), "text is upright or rotated 90°");
     const [, encoded] = block.match(/<([0-9A-F]*)> Tj/);
     if (!maps.has(name)) {
       const font = fonts.lookup(PDFName.of(name));
@@ -69,7 +73,7 @@ function overlayTextRuns(document, page, overlay) {
       assert.ok(mapping.has(code), `missing Unicode mapping for ${code}`);
       return mapping.get(code);
     }).join("");
-    return { value, size: Number(rawSize), x: Number(rawX), y: Number(rawY) };
+    return { value, size: Number(rawSize), x: Number(rawX), y: Number(rawY), rotated };
   });
 }
 
@@ -144,13 +148,27 @@ test("3/4/5 exports reproduce the template page unchanged and only fill contacts
     assert.equal(document.getPageCount(), SHEET_COPIES);
     assert.equal(SHEET_COPIES, 3);
     const [page, ...copies] = document.getPages();
-    // Every copy is the same unchanged template page with the same filled values, in the same places.
-    const firstRuns = overlayTextRuns(document, page, contentStreams(document, page).at(-1));
+    // Every copy is the same unchanged template page with the same filled values,
+    // in the same places, plus only its own "COPY n OF 3" label in the blank left margin.
+    const sheetRuns = (p) => overlayTextRuns(document, p, contentStreams(document, p).at(-1)).filter((r) => !r.rotated);
+    const firstRuns = sheetRuns(page);
+    document.getPages().forEach((p, index) => {
+      const labels = overlayTextRuns(document, p, contentStreams(document, p).at(-1)).filter((r) => r.rotated);
+      assert.equal(labels.length, 1);
+      const [label] = labels;
+      assert.equal(label.value, copyLabel(index + 1));
+      assert.equal(label.value, `COPY ${index + 1} OF 3`);
+      // Rotated 90°: glyphs extend left of the baseline by at most the ascent, and upward by the text width.
+      const bounds = measurePdfGlyphBounds(label.value, label.size);
+      assert.ok(label.x + 0.5 < COPY_LABEL.inkMinX, "label baseline left of the sheet's ink");
+      assert.ok(label.x - bounds.maxY >= 18, "label inside a 0.25 in printable margin");
+      assert.ok(label.y > 18 && label.y + bounds.maxX < 792 - 18, "label within the page height");
+    });
     for (const copy of copies) {
       assert.equal(copy.getWidth(), 612);
       assert.equal(copy.getHeight(), 792);
       assert.notEqual(copy.ref.toString(), page.ref.toString());
-      assert.deepEqual(overlayTextRuns(document, copy, contentStreams(document, copy).at(-1)), firstRuns);
+      assert.deepEqual(sheetRuns(copy), firstRuns);
       assert.deepEqual(sheetStreams(document, copy.node.Resources()), sheetStreams(document, page.node.Resources()));
       assert.equal(contentStreams(document, copy).length, contentStreams(document, page).length);
     }
@@ -169,8 +187,11 @@ test("3/4/5 exports reproduce the template page unchanged and only fill contacts
     // Overlay values are drawn in the sheet's own coordinates through the
     // template's form matrix, so each value lands in its scaled box.
     assert.match(overlay, /^q\n0\.4836 0 0 0\.4836 18\.10608 -24\.93408 cm\n/);
-    assert.match(overlay, /\nQ\n?$/);
-    const runs = overlayTextRuns(document, page, overlay);
+    // The sheet overlay closes its matrix; after it comes only the rotated copy label.
+    const labelStart = overlay.lastIndexOf("\nq\nBT\n");
+    assert.match(overlay.slice(0, labelStart), /\nQ\nQ$/);
+    assert.match(overlay.slice(labelStart), /^\nq\nBT\n[\s\S]* 1 -1 [-\d.e]+ 26 [\d.]+ Tm\n<[0-9A-F]+> Tj\nT\*\nET\nQ\n?$/);
+    const runs = overlayTextRuns(document, page, overlay).filter((r) => !r.rotated);
     const padRuns = runs.filter(({ size }) => size === PAD_LETTER_SIZE);
     const contactRuns = runs.filter(({ size }) => size !== PAD_LETTER_SIZE);
     assert.equal(padRuns.length, count * 80);

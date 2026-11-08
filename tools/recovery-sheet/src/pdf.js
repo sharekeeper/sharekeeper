@@ -1,6 +1,6 @@
 import {
   PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFRef, concatTransformationMatrix,
-  decodePDFRawStream, popGraphicsState, pushGraphicsState, rgb,
+  decodePDFRawStream, degrees, popGraphicsState, pushGraphicsState, rgb,
 } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { FONT_BASE64, TEMPLATE_BASE64 } from "./pdf-assets.js";
@@ -51,8 +51,17 @@ export const PDF_CONTACT_FRAME = Object.freeze({
 // groups 78.8551pt apart; first cell bottom-left at (371, 1294.78).
 export const PAD_CELL = Object.freeze({ x: 371, y: 1294.78, width: 16, height: 26, groupPitch: 78.8551, rowPitch: 46 });
 export const PAD_LETTER_SIZE = 15;
-/** The unified recovery-sheet PDF holds this many identical copies, one per page. */
+/** The unified recovery-sheet PDF holds this many copies of the filled sheet, one per page. */
 export const SHEET_COPIES = 3;
+/**
+ * Each copy is labeled "COPY n OF 3" in the page's blank left margin, outside
+ * the template drawing (whose ink starts at x ≈ 32 pt on the US Letter page),
+ * running bottom-to-top and centred vertically. The sheet itself is untouched.
+ */
+export const COPY_LABEL = Object.freeze({ baselineX: 26, size: 9, pageMidY: 396, inkMinX: 31 });
+export function copyLabel(copy) {
+  return `COPY ${copy} OF ${SHEET_COPIES}`;
+}
 // FIRST 2 CIPHER GROUPS: two groups of four 14.2 x 26pt cells at x=201 and 269.
 export const PREFIX_CELL = Object.freeze({ xs: [201, 269], y: 1186.78, width: 14.2, height: 26 });
 export const PREFIX_LETTER_SIZE = 13;
@@ -378,6 +387,12 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary, thresho
       }
     });
     page.pushOperators(popGraphicsState());
+    const label = copyLabel(pages.indexOf(page) + 1);
+    page.drawText(label, {
+      x: COPY_LABEL.baselineX,
+      y: COPY_LABEL.pageMidY - font.widthOfTextAtSize(label, COPY_LABEL.size) / 2,
+      size: COPY_LABEL.size, font, color: INK, rotate: degrees(90),
+    });
   }
   return document.save({ useObjectStreams: true });
 }
