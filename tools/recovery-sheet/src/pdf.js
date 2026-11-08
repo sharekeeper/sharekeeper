@@ -1,10 +1,17 @@
-import { PDFDocument, PDFName, decodePDFRawStream, rgb } from "pdf-lib";
+import {
+  PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFRef, concatTransformationMatrix,
+  decodePDFRawStream, popGraphicsState, pushGraphicsState, rgb,
+} from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { FONT_BASE64, TEMPLATE_BASE64 } from "./pdf-assets.js";
 import { KEEPER_COUNTS, PAD_LENGTH } from "../shared/schema.js";
 
 // The bundled template is the supplied sample PDF, byte for byte. Its page is
 // reproduced unchanged; the generator only writes values into blank fields.
+// Field geometry below is in the coordinates of the sheet's own content stream
+// (the original A2 drawing). When the template places that drawing inside a
+// scaled form XObject (the US Letter revision), the overlay uses the same
+// transform, read from the template, so every value lands in its box.
 // Ink colour of the template's own body text.
 const INK = rgb(0.094118, 0.184314, 0.247059);
 const KEEPER_STRIDE = 200;
@@ -171,24 +178,78 @@ export async function validatePdfContacts(keepers) {
   return validateAndLayout(keepers, font).errors;
 }
 
+const IDENTITY = Object.freeze([1, 0, 0, 1, 0, 0]);
+const SHEET_MARKER = "SHAREKEEPER SLIP-39 RECOVERY SHEET";
+
+function streamText(stream) {
+  return new TextDecoder("latin1").decode(decodePDFRawStream(stream).decode());
+}
+
+// Row-vector PDF matrices: a point in the inner space maps by inner, then outer.
+function multiply(inner, outer) {
+  return [
+    inner[0] * outer[0] + inner[1] * outer[2],
+    inner[0] * outer[1] + inner[1] * outer[3],
+    inner[2] * outer[0] + inner[3] * outer[2],
+    inner[2] * outer[1] + inner[3] * outer[3],
+    inner[4] * outer[0] + inner[5] * outer[2] + outer[4],
+    inner[4] * outer[1] + inner[5] * outer[3] + outer[5],
+  ];
+}
+
+function formMatrix(form) {
+  const matrix = form.dict.lookupMaybe(PDFName.of("Matrix"), PDFArray);
+  if (!matrix) return [...IDENTITY];
+  const values = matrix.asArray().map((value) => (value instanceof PDFNumber ? value.asNumber() : NaN));
+  if (values.length !== 6 || values.some((value) => !Number.isFinite(value))) throw new Error("Unexpected template form matrix.");
+  return values;
+}
+
+/**
+ * Find the content stream that draws the sheet, following only plain
+ * `[q] /Name Do [Q]` form wrappers, and the transform from that stream's
+ * coordinates to the page. Anything else is refused rather than guessed.
+ */
+export function locateTemplateSheet(template) {
+  const page = template.getPage(0);
+  let ref = page.node.get(PDFName.of("Contents"));
+  if (ref instanceof PDFArray && ref.size() === 1) ref = ref.get(0);
+  if (!(ref instanceof PDFRef)) throw new Error("Unexpected template content structure.");
+  let stream = template.context.lookup(ref);
+  let resources = page.node.Resources();
+  let matrix = [...IDENTITY];
+  for (let depth = 0; depth < 4; depth += 1) {
+    const text = streamText(stream);
+    if (text.includes(SHEET_MARKER)) return { ref, stream, text, matrix };
+    const wrapper = text.trim().split(/\s+/).join(" ").match(/^(?:q )?\/(\S+) Do(?: Q)?$/);
+    const xobjects = resources?.lookupMaybe(PDFName.of("XObject"), PDFDict);
+    if (!wrapper || !xobjects) throw new Error("Unexpected template content structure.");
+    ref = xobjects.get(PDFName.of(wrapper[1]));
+    if (!(ref instanceof PDFRef)) throw new Error("Unexpected template content structure.");
+    stream = template.context.lookup(ref);
+    matrix = multiply(formMatrix(stream), matrix);
+    resources = stream.dict.lookupMaybe(PDFName.of("Resources"), PDFDict);
+  }
+  throw new Error("Template sheet content was not found.");
+}
+
 /**
  * Load the untouched template. For 3-of-3 and 3-of-4 sheets only the share
  * count digit in the header literal changes, in the template's own font.
  */
 async function templatePage(count) {
   const template = await PDFDocument.load(decodeBase64(TEMPLATE_BASE64), { updateMetadata: false });
-  const page = template.getPage(0);
+  const sheet = locateTemplateSheet(template);
   if (count !== 5) {
-    const contents = page.node.Contents();
-    if (!contents || typeof contents.asArray === "function") throw new Error("Unexpected template content structure.");
-    const decoded = new TextDecoder("latin1").decode(decodePDFRawStream(contents).decode());
-    const occurrences = decoded.split(HEADER_LITERAL).length - 1;
-    if (occurrences !== 1) throw new Error("Template header changed; review before export.");
-    const updated = decoded.replace(HEADER_LITERAL, `(3 OF ${count}  |`);
-    const bytes = Uint8Array.from(updated, (character) => character.charCodeAt(0));
-    page.node.set(PDFName.of("Contents"), template.context.register(template.context.flateStream(bytes)));
+    if (sheet.text.split(HEADER_LITERAL).length - 1 !== 1) throw new Error("Template header changed; review before export.");
+    const updated = sheet.text.replace(HEADER_LITERAL, `(3 OF ${count}  |`);
+    const fresh = template.context.flateStream(Uint8Array.from(updated, (character) => character.charCodeAt(0)));
+    for (const [key, value] of sheet.stream.dict.entries()) {
+      if (!["/Filter", "/Length", "/DecodeParms"].includes(key.toString())) fresh.dict.set(key, value);
+    }
+    template.context.assign(sheet.ref, fresh);
   }
-  return template;
+  return { template, matrix: sheet.matrix };
 }
 
 function drawContacts(page, font, rows, offset) {
@@ -216,7 +277,7 @@ function drawPad(page, font, pad, offset) {
 }
 
 /**
- * Generate the one-page A2 recovery sheet entirely in browser memory: the
+ * Generate the one-page recovery sheet entirely in browser memory: the
  * supplied template page, unchanged, with contacts and private pads written
  * into its blank fields. Contacts and pads are never fetched, persisted,
  * logged, or uploaded. Ciphertext prefixes, CRC32 and wallet rows stay blank.
@@ -240,7 +301,7 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary }) {
     throw error;
   }
 
-  const template = await templatePage(keepers.length);
+  const { template, matrix } = await templatePage(keepers.length);
   const [page] = await document.copyPages(template, [0]);
   document.addPage(page);
   document.setTitle(`Sharekeeper SLIP-39 recovery sheet: 3 of ${keepers.length}`);
@@ -251,10 +312,12 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary }) {
   document.setProducer("pdf-lib / Sharekeeper");
   document.setKeywords(["Sharekeeper", "recovery sheet", "private pads", "prototype"]);
 
+  page.pushOperators(pushGraphicsState(), concatTransformationMatrix(...matrix));
   keepers.forEach((_, index) => {
     const offset = index * KEEPER_STRIDE;
     drawContacts(page, font, layouts[index], offset);
     drawPad(page, font, pads[index], offset);
   });
+  page.pushOperators(popGraphicsState());
   return document.save({ useObjectStreams: true });
 }

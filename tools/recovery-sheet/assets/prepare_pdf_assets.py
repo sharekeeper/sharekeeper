@@ -21,14 +21,24 @@ import pypdf
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "templates/recovery/slip39_recovery_sheet.pdf"
-EXPECTED_SOURCE_SHA256 = "fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6"
+EXPECTED_SOURCE_SHA256 = "8bc121acfea77e62f98d797141e3fe1108f9fe4b20218c72b6a611699bf9961d"
 FONT = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
 COPYRIGHT = Path("/usr/share/doc/fonts-dejavu-core/copyright")
 
 source_hash = sha256(SOURCE.read_bytes()).hexdigest()
 assert source_hash == EXPECTED_SOURCE_SHA256, "Source template changed: review its labels and geometry before rebundling"
 reader = pypdf.PdfReader(SOURCE)
-stream = reader.pages[0].get_contents().get_data().decode("latin1")
+page = reader.pages[0]
+# The US Letter revision places the original A2 sheet, unchanged, inside a
+# scaled form XObject: page -> /fzFrm0 (scale matrix, crop BBox) -> /fullpage.
+assert [float(v) for v in page["/MediaBox"]] == [0, 0, 612, 792]
+assert page.get_contents().get_data().decode("latin1").split() == ["q", "/fzFrm0", "Do", "Q"]
+outer = page["/Resources"]["/XObject"]["/fzFrm0"].get_object()
+assert [float(v) for v in outer["/Matrix"]] == [0.4836, 0, 0, 0.4836, 18.10608, -24.93408]
+assert outer.get_data().decode("latin1").split() == ["/fullpage", "Do"]
+inner = outer["/Resources"]["/XObject"]["/fullpage"].get_object()
+assert [float(v) for v in inner.get("/Matrix", [1, 0, 0, 1, 0, 0])] == [1, 0, 0, 1, 0, 0]
+stream = inner.get_data().decode("latin1")
 # Reviewed source facts the generator relies on. The template itself is bundled
 # byte for byte; the generator only writes into its blank fields.
 assert stream.count("(Expected Ciphertext CRC32:)") == 5

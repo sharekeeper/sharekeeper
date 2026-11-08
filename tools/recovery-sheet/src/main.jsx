@@ -221,7 +221,7 @@ function App() {
               </button>)}
             </div></fieldset>
             <p className="technical-note">The worksheet uses a fixed recovery threshold of 3, regardless of the keeper count. It prepares pad and contact fields, not the shares themselves.</p>
-            <div className="profile-row"><span><strong>{THRESHOLD}-of-{count}</strong> sheet layout</span><span><strong>{PAD_LENGTH} letters</strong> per pad</span><span><strong>A2</strong> printable PDF</span></div>
+            <div className="profile-row"><span><strong>{THRESHOLD}-of-{count}</strong> sheet layout</span><span><strong>{PAD_LENGTH} letters</strong> per pad</span><span><strong>US Letter</strong> printable PDF</span></div>
             <div className="plain-note"><LockKeyhole size={19} aria-hidden="true" /><div><h3>Keep wallet secrets out of this tool.</h3><p>We never ask for a seed phrase, share, or wallet passphrase. This prototype creates pads and a contact sheet, not SLIP-39 shares.</p></div></div>
             <div className="actions"><button className="primary-button" onClick={() => go(1)} disabled={!cryptoReady} data-testid="button-start">Continue to contacts <ArrowRight size={17} aria-hidden="true" /></button></div>
           </>}
@@ -272,9 +272,9 @@ function App() {
             <p className="eyebrow">Ready / Private document</p>
             <h2 id="step-heading" tabIndex="-1" ref={headingRef}>Your recovery sheet is ready.</h2>
             <p className="subheading">Your {count} independently generated pads are in the PDF. Download the same sheet again without changing its keys.</p>
-            <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Sharekeeper recovery sheet</h3><p>{count} sharekeepers · 80-letter pads · A2 PDF</p><span>Contains secrets. Store and print privately.</span></div></div>
+            <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Sharekeeper recovery sheet</h3><p>{count} sharekeepers · 80-letter pads · US Letter PDF</p><span>Contains secrets. Store and print privately.</span></div></div>
             <div className="actions"><a className="primary-button" href={pdfUrl} download="sharekeeper-recovery-sheet-private.pdf" data-testid="download-pdf"><Download size={18} aria-hidden="true" /> Download private PDF</a></div>
-            <p className="technical-note">Print at actual A2 size, or tile at 100%. Shrinking the whole sheet to A4 makes the contact fields difficult to read.</p>
+            <p className="technical-note">Print on US Letter at 100% (actual size). Do not use “fit to page” or shrink further; the contact lines and pad cells are small.</p>
             <div className="secret-section"><button className="text-button" aria-expanded={reveal} onClick={() => setReveal(!reveal)} data-testid="toggle-pads">{reveal ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}{reveal ? "Hide pads on screen" : "Show pads on screen"}</button>
               {reveal && <div className="pad-list">{pads.map((pad, i) => <article key={i}><h3>Sharekeeper {i + 1} · Secret pad K</h3><p className="pad-text" data-testid={`pad-${i + 1}`}>{groupPad(pad)}</p></article>)}</div>}
             </div>
@@ -295,7 +295,7 @@ function App() {
           <div className="paper-wallets"><span>ACCOUNTS / WALLET PASSPHRASES</span>{Array.from({ length: 7 }, (_, i) => <i key={i} />)}</div>
         </div>
         <p className="preview-caption">Layout preview · no secret keys shown</p>
-        <dl className="document-facts"><div><dt>Sharekeepers</dt><dd>{count} independent contacts</dd></div><div><dt>Pad format</dt><dd>20 groups × 4 A–Z letters</dd></div><div><dt>Randomness</dt><dd>Browser RNG + your input</dd></div><div><dt>Output</dt><dd>One private A2 PDF</dd></div></dl>
+        <dl className="document-facts"><div><dt>Sharekeepers</dt><dd>{count} independent contacts</dd></div><div><dt>Pad format</dt><dd>20 groups × 4 A–Z letters</dd></div><div><dt>Randomness</dt><dd>Browser RNG + your input</dd></div><div><dt>Output</dt><dd>One private US Letter PDF</dd></div></dl>
       </aside>
     </div>
     <dialog ref={dialogRef} onCancel={(e) => { e.preventDefault(); setClearDialog(false); }} className="clear-dialog" aria-labelledby="clear-heading">

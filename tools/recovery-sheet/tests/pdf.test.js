@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PDFDocument, PDFName, decodePDFRawStream } from "pdf-lib";
+import { PDFDict, PDFDocument, PDFName, decodePDFRawStream } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -74,14 +74,35 @@ function overlayTextRuns(document, page, overlay) {
 
 const SOURCE_URL = new URL("../../../templates/recovery/slip39_recovery_sheet.pdf", import.meta.url);
 
+// The sheet drawing itself, wherever the template nests it (page content or a
+// scaled form XObject), found independently of the generator's own locator.
+function sheetStreams(document, resources, seen = new Set()) {
+  const found = [];
+  const xobjects = resources?.lookupMaybe(PDFName.of("XObject"), PDFDict);
+  if (!xobjects) return found;
+  for (const [, ref] of xobjects.entries()) {
+    if (seen.has(String(ref))) continue;
+    seen.add(String(ref));
+    const stream = document.context.lookup(ref);
+    const text = new TextDecoder("latin1").decode(decodePDFRawStream(stream).decode());
+    if (text.includes("SHAREKEEPER SLIP-39 RECOVERY SHEET")) found.push(text);
+    found.push(...sheetStreams(document, stream.dict.lookupMaybe(PDFName.of("Resources"), PDFDict), seen));
+  }
+  return found;
+}
+
 async function sourceStream() {
   const document = await PDFDocument.load(await readFile(SOURCE_URL));
-  return contentStreams(document, document.getPages()[0]).join("\n");
+  const page = document.getPages()[0];
+  const streams = [...contentStreams(document, page).filter((text) => text.includes("SHAREKEEPER SLIP-39 RECOVERY SHEET")),
+    ...sheetStreams(document, page.node.Resources())];
+  assert.equal(streams.length, 1);
+  return streams[0];
 }
 
 test("bundled template is the supplied sample PDF byte for byte", async () => {
   const source = await readFile(SOURCE_URL);
-  assert.equal(SOURCE_TEMPLATE_SHA256, "fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6");
+  assert.equal(SOURCE_TEMPLATE_SHA256, "8bc121acfea77e62f98d797141e3fe1108f9fe4b20218c72b6a611699bf9961d");
   assert.equal(createHash("sha256").update(source).digest("hex"), SOURCE_TEMPLATE_SHA256);
   const bundled = Uint8Array.from(atob(TEMPLATE_BASE64), (character) => character.charCodeAt(0));
   assert.equal(createHash("sha256").update(bundled).digest("hex"), SOURCE_TEMPLATE_SHA256);
@@ -121,18 +142,22 @@ test("3/4/5 exports reproduce the template page unchanged and only fill contacts
     const document = await PDFDocument.load(bytes);
     assert.equal(document.getPageCount(), 1);
     const [page] = document.getPages();
-    assert.ok(Math.abs(page.getWidth() - 1190.551) < 0.01);
-    assert.ok(Math.abs(page.getHeight() - 1683.78) < 0.01);
+    assert.equal(page.getWidth(), 612);
+    assert.equal(page.getHeight(), 792);
     assert.equal(document.getTitle(), `Sharekeeper SLIP-39 recovery sheet: 3 of ${count}`);
     // The original application catalog and Content Credentials are not inherited.
     assert.equal(document.catalog.get(PDFName.of("AF")), undefined);
     assert.equal(document.catalog.get(PDFName.of("Names")), undefined);
     const streams = contentStreams(document, page);
-    const templateStreams = streams.filter((stream) => stream.includes("SHAREKEEPER SLIP-39 RECOVERY SHEET"));
+    const templateStreams = sheetStreams(document, page.node.Resources());
     assert.equal(templateStreams.length, 1);
+    assert.equal(streams.some((stream) => stream.includes("SHAREKEEPER SLIP-39 RECOVERY SHEET")), false);
     assert.equal(templateStreams[0], original.replace("(3 OF 5  |", `(3 OF ${count}  |`));
     const overlay = streams.at(-1);
-    assert.notEqual(overlay, templateStreams[0]);
+    // Overlay values are drawn in the sheet's own coordinates through the
+    // template's form matrix, so each value lands in its scaled box.
+    assert.match(overlay, /^q\n0\.4836 0 0 0\.4836 18\.10608 -24\.93408 cm\n/);
+    assert.match(overlay, /\nQ\n?$/);
     const runs = overlayTextRuns(document, page, overlay);
     const padRuns = runs.filter(({ size }) => size === PAD_LETTER_SIZE);
     const contactRuns = runs.filter(({ size }) => size !== PAD_LETTER_SIZE);

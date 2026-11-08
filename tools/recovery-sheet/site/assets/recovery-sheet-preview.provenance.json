@@ -1,17 +1,17 @@
 {
   "sourceRepositoryPath": "templates/recovery/slip39_recovery_sheet.pdf",
-  "sourceSha256": "fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6",
+  "sourceSha256": "8bc121acfea77e62f98d797141e3fe1108f9fe4b20218c72b6a611699bf9961d",
   "previewFile": "recovery-sheet-preview.webp",
-  "previewSha256": "c01976936d83c38e631cb27788af7ad154b3334362f92eeec409d4eca3b60630",
-  "width": 1061,
+  "previewSha256": "20ceccf0e81c508977f4e0884e900f86c54e2d42ebab8650cb38a164ed14b348",
+  "width": 1160,
   "height": 1500,
   "sourcePage": 1,
   "rendering": "pdftoppm, page 1, scale-to 1500, PNG intermediate",
   "encoding": "ImageMagick WebP, quality 82, method 6",
   "contentChanges": [
     "Preview preserves the uploaded source without modifying its text or layout.",
-    "Five keeper sections; timing fields removed from section headings.",
-    "Seven account/passphrase rows.",
+    "US Letter revision: the same sheet scaled onto a 612 x 792 pt page.",
+    "Five keeper sections and seven account/passphrase rows.",
     "Printed recovery instructions remain unmodified prototype material."
   ]
 }

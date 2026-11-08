@@ -1,6 +1,6 @@
 # Sharekeeper website and recovery sheet generator
 
-A browser-only interview for 3–5 sharekeepers, local pad generation, and a downloadable private A2 worksheet based on the supplied recovery-sheet prototype. This is an unaudited prototype, not a complete SLIP-39 backup system or an approved Sharekeeper protocol implementation.
+A browser-only interview for 3–5 sharekeepers, local pad generation, and a downloadable private US Letter recovery sheet based on the supplied recovery-sheet prototype. This is an unaudited prototype, not a complete SLIP-39 backup system or an approved Sharekeeper protocol implementation.
 
 The site also includes a separate public portal for the working standard, educational material, tools, and reviewed provider directory. Public portal code lives in `site/`; it is not imported into the secret generator.
 

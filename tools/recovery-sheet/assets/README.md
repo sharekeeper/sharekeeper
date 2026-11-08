@@ -14,8 +14,12 @@ page into a new document leaves out the source's Content Credentials attachments
 and catalog claims, which do not attest to a filled-in sheet.
 
 The current source revision has SHA-256
-`fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6`.
-The asset script asserts the reviewed labels, the header literal `3 OF 5  |`,
+`8bc121acfea77e62f98d797141e3fe1108f9fe4b20218c72b6a611699bf9961d`.
+This US Letter revision nests the original A2 drawing in a scaled form XObject
+(`/fzFrm0`, matrix `0.4836 0 0 0.4836 18.10608 -24.93408`, then `/fullpage`).
+The generator follows that nesting, draws its overlay through the same matrix,
+and keeps field geometry in the drawing's own coordinates. The asset script
+asserts this structure, the reviewed labels, the header literal `3 OF 5  |`,
 and the 400 pad cells (16 by 26 points) before bundling.
 
 Values are written on the template's own geometry: the seven contact rules per

@@ -44,7 +44,7 @@ The hosted baseline was opened before these edits. It shows the supplied domain 
 
 - Open and download the blank sample from Home, Standard, or Tools.
 - Expect: The latest supplied PDF, preserved byte-for-byte, with FIRST 2 CIPHER GROUPS and an eight-hex-digit Expected Ciphertext CRC32 field.
-- For the newest uploaded revision, expect SHA-256 `fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6`, seven blank account/wallet records, and the revised, more compact keeper layout in the actual download and thumbnail. The generator's abstract sidebar miniature must also show seven wallet rows, not its older three-row placeholder.
+- For the newest uploaded revision, expect SHA-256 `8bc121acfea77e62f98d797141e3fe1108f9fe4b20218c72b6a611699bf9961d`, seven blank account/wallet records, and the revised, more compact keeper layout in the actual download and thumbnail. The generator's abstract sidebar miniature must also show seven wallet rows, not its older three-row placeholder.
 - Generate sheets for 3, 4, and 5 keepers. Expect: The page is the supplied sample, unchanged, with contacts on the seven template lines and pad letters in the pad cells; ciphertext/CRC32/passphrase fields and unused share sections stay blank; only the header share count reflects 3, 4, or 5.
 - Inspect every generated keeper block against the new layout. Expect: All 80 letters remain inside the twenty four-cell groups; contact ink, prefix labels, and eight CRC32 cells do not collide; contacts are single lines on the template rules at 7–11pt; overlong values are rejected, not truncated.
 - Expect: Educational copy distinguishes a CRC32 checksum from cryptographic authentication; the generator does not calculate a checksum of a pad and mislabel it as ciphertext.
@@ -90,7 +90,7 @@ The hosted baseline was opened before these edits. It shows the supplied domain 
 
 - Start: Your recovery sheet is ready.
 - Download the private PDF twice, then show and hide the on-screen pads.
-- Expect: Identical downloads, one 80-letter pad per active keeper, a one-page A2 output, and no ciphertext/hash/passphrase values invented.
+- Expect: Identical downloads, one 80-letter pad per active keeper, a one-page US Letter output, and no ciphertext/hash/passphrase values invented.
 
 ## Clear and start again
 

@@ -11,7 +11,7 @@ test("public sheet preview is derived from the current canonical blank PDF", asy
   const preview = await readFile(new URL(`./assets/${provenance.previewFile}`, import.meta.url));
   assert.equal(sha256(source), provenance.sourceSha256, "Regenerate the visible preview when the canonical blank sheet changes.");
   assert.equal(sha256(preview), provenance.previewSha256, "Preview bytes must match the recorded, inspected rendering.");
-  assert.equal(provenance.width, 1061);
+  assert.equal(provenance.width, 1160);
   assert.equal(provenance.height, 1500);
   assert.equal(provenance.sourcePage, 1);
 });
