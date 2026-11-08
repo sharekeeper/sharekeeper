@@ -52,6 +52,26 @@ The public portal is a separate bundle. A configured private provider applicatio
 
 Clearing a session revokes its active PDF URL, resets application state, and overwrites mutable input buffers on a best-effort basis. JavaScript strings, browser copies, cryptographic internals, downloaded files, screenshots, printers, and print queues cannot be guaranteed erased. Compromised browsers, extensions, devices, or distribution infrastructure remain outside this protection.
 
+## Approval-only provider export
+
+The offline helper `scripts/export-approved-providers.mjs` prepares a public candidate, never a publication. Keep its private input and output outside this repository; it performs no network or Google operations and never edits `site/providers.json`.
+
+Input is `{ "schemaVersion": 1, "records": [...] }`. Every record must contain exactly `reviewStatus: "Approved"`, boolean `publicationApproved: true`, nonempty `reviewedBy` (maximum 160 characters), `reviewedAt` (a real, nonfuture `YYYY-MM-DD` date or timezone-qualified ISO timestamp), a stable nonempty `sourceSubmissionRef` (maximum 512 characters), and `publicListing`. The latter contains required `id`, `businessName`, HTTPS `website`, `jurisdiction`, `serviceArea`, `services`, and `description`; only `address`, `publicEmail`, and `publicPhone` are optional. IDs use lowercase letters, digits, hyphens or underscores. Services must be nonempty, unique members of `SERVICES` in `site/directory.js`; public text uses that module's existing limits (IDs: 100 characters), without silent trimming or truncation.
+
+Applicant consent, raw form answers, public listing status, and private notes are not accepted as reviewer approval. Adapt the private review queue into this minimal transport-independent schema without copying raw Google responses into this repository. Unknown fields, nested public fields, invalid dates, duplicate sources or IDs, unsupported services, unsafe websites, any unapproved record, or an empty batch reject the whole batch without a partial export. Review metadata is validated but never included in output; only the existing public allowlist is emitted, with `status: "approved"` and the explicit review date as `reviewedOn`.
+
+```sh
+node scripts/export-approved-providers.mjs \
+  --input /private/review-records.json \
+  --output /private/new-public-candidate.json
+```
+
+Both the resolved private input and output must be outside the entire repository, including symlink destinations; input within the repository is rejected before reading. The output path must be explicit, new, and distinct from the input. Use a private, trusted output directory that other users or processes cannot rename or replace during export; filesystem checks do not protect against hostile concurrent directory replacement. Creation uses private file permissions and an atomic, no-overwrite final link after successful writing, syncing, and closing; failures at those stages leave no final candidate. Both API and CLI errors redact filesystem paths and private payloads.
+
+A separate authorized human must inspect the public candidate and explicitly decide whether to publish it. This command never grants approval, publishes, commits, pushes, or deploys. Tests use synthetic data only; no actual applicant data belongs in fixtures or source control.
+
+The output is a selected candidate batch to merge with the existing directory, not a full replacement directory. Preserve existing published entries when reviewing a merge; deleting any existing published entry requires separate authorization.
+
 ## Prototype profile and source preservation
 
 The generator explicitly chooses an 80-letter, 20-by-4 worksheet profile. It does not turn that implementation choice or the sample into a finalized normative standard.
