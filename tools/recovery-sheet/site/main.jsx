@@ -123,7 +123,6 @@ function App() {
         </button>
         <nav id="main-navigation" className={menuOpen ? "main-nav open" : "main-nav"} aria-label="Main navigation">
           {NAV.map(([to, label]) => <RouteLink key={to} to={to} aria-current={route === to ? "page" : undefined}>{label}</RouteLink>)}
-          <RouteLink to="/apply" className="nav-apply" aria-current={route === "/apply" ? "page" : undefined}>Submit a provider<ArrowUpRight size={16} aria-hidden="true" /></RouteLink>
         </nav>
       </div>
     </header>
@@ -306,6 +305,10 @@ function Providers() {
   const clear = () => { setQuery(""); setJurisdiction(""); setService(""); };
   return <>
     <PageHeading title="Provider directory">A public directory of reviewed, approved listings. Inclusion is not a security certification, legal endorsement, or guarantee of service.</PageHeading>
+    <div className="provider-apply container">
+      <RouteLink to="/apply" className="button">Submit a provider<ArrowUpRight size={18} aria-hidden="true" /></RouteLink>
+      <p>Represent an organization? Proposed listings are reviewed before publication.</p>
+    </div>
     <section className="directory-section container" aria-label="Search the provider directory">
       <form className="directory-filters" onSubmit={(event) => event.preventDefault()} role="search">
         <div className="search-field"><label htmlFor="provider-search">Search providers</label><div><Search size={20} aria-hidden="true" /><input id="provider-search" type="search" placeholder="Name, location, or service" value={query} onChange={(event) => setQuery(event.target.value)} /></div></div>
@@ -318,7 +321,7 @@ function Providers() {
         <UsersRound size={42} strokeWidth={1.4} aria-hidden="true" />
         <h2>{hasFilters ? "No matching providers." : "The directory starts with review."}</h2>
         <p>{hasFilters ? "There are no approved listings matching these filters. The directory currently has no approved providers; changing filters cannot reveal unreviewed applications." : "No providers have been approved for publication yet. We will not fill this directory with unverified names, sample businesses, or pending applications."}</p>
-        {hasFilters ? <button type="button" className="button" onClick={clear}>Clear filters<ArrowRight size={18} aria-hidden="true" /></button> : <RouteLink to="/apply" className="button">{HOSTED_FORM ? "Submit an application" : "Prepare an application"}<ArrowRight size={18} aria-hidden="true" /></RouteLink>}
+        {hasFilters && <button type="button" className="button" onClick={clear}>Clear filters<ArrowRight size={18} aria-hidden="true" /></button>}
       </div>}
     </section>
     <section className="directory-principles container"><div><h2>Public listings.<br />Private review.</h2><p>The directory is not an application feed. Proposed organizations do not become listings automatically.</p><p>It is a business directory, not a client-to-keeper map. It does not collect client accounts, client recovery contacts, or share locations.</p></div><div className="review-principles"><div><ShieldCheck size={25} aria-hidden="true" /><div><h3>Approval before publication</h3><p>Only records marked approved can appear. Business details are published from an explicit public-field allowlist.</p></div></div><div><LockKeyhole size={25} aria-hidden="true" /><div><h3>Reviewer details stay separate</h3><p>Private contact names, private email addresses, and review notes are not directory fields. No identity documents or recovery secrets are requested.</p></div></div></div></section>

@@ -27,9 +27,18 @@ The hosted baseline was opened before these edits. It shows the supplied domain 
 ## Full website and navigation
 
 - Start: Home at the existing public website address.
-- Open Standard, Learn, Tools, Providers, and the provider application page through their real navigation controls; use browser Back and a direct hash URL.
+- Open Standard, Learn, Tools, and Providers through the header; open the provider application through Submit a provider on Providers. Use browser Back and a direct hash URL.
 - Expect: Distinct, accessible pages in the supplied logo's navy/cyan palette, visible working-draft status, no fabricated endorsements or providers, and mobile navigation that fits at 375 px.
 - Open the recovery tool from Tools. Expect a separate `recovery.html` document, not a network-enabled form mounted in the secret generator.
+
+## Provider application entry point
+
+- Baseline: The public Providers page was opened before editing; Submit a provider is still a global-header action, with a second application action in the empty-directory state.
+- Remove Submit a provider from the desktop header and mobile menu on every route. Keep the five primary navigation links unchanged.
+- Place one clearly labeled Submit a provider action directly on the Providers page, above the search/filter area, and keep it available while filtering or when approved listings are added.
+- Click that action at desktop and 375 px. Expect the existing Apply page, unchanged hosted-form URL, optional local draft, and privacy/approval boundaries.
+- Avoid a duplicate submit action in the empty-directory state. Preserve Clear filters and existing homepage/footer application links.
+- Recheck CRC32 text/file calculation and comparison, all six routes, mobile menu/Escape, directory filtering/reset, and the separate recovery generator after this navigation-only change.
 
 ## Updated source sheet
 
