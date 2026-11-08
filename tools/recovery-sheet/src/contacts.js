@@ -5,7 +5,6 @@ export const FIELD_LIMITS = {
   region: 80,
   reference: 60,
   phone: 48,
-  email: 100,
   website: 120,
 };
 
@@ -18,11 +17,8 @@ export function contactErrors(keeper) {
     else if ([...value].length > limit) errors[field] = `Use no more than ${limit} characters.`;
   }
   if (!keeper.name?.trim()) errors.name = "Enter the sharekeeper’s name.";
-  if (![keeper.phone, keeper.email, keeper.website, keeper.address1].some((v) => v?.trim())) {
-    errors.phone = "Add a phone, email, website, or postal address.";
-  }
-  if (keeper.email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(keeper.email.trim())) {
-    errors.email = "Enter a complete email address.";
+  if (![keeper.phone, keeper.website, keeper.address1].some((v) => v?.trim())) {
+    errors.phone = "Add a phone, website, or street address.";
   }
   return errors;
 }

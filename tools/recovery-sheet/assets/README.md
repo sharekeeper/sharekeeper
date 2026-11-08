@@ -6,38 +6,24 @@ JavaScript is intentional: all bytes are bundled in both development and
 production, so PDF export requires no `fetch`, network request, font service, or
 runtime resource loading.
 
-The source at `templates/recovery/slip39_recovery_sheet.pdf` is not modified.
-The derivative removes only labels redrawn by the PDF module, the old seven-day
-policy, and static "Empty" hints in the blank wallet table. Copying only the page
-also removes the source document's Content Credentials attachments and catalog
-claims. The generated PDF is a modified prototype, not an attested original.
+The source at `templates/recovery/slip39_recovery_sheet.pdf` is not modified and
+is bundled byte for byte as `TEMPLATE_BASE64`; tests check its SHA-256. The
+generated sheet reproduces that page's content stream unchanged and adds one
+overlay stream containing only contact values and pad letters. Copying only the
+page into a new document leaves out the source's Content Credentials attachments
+and catalog claims, which do not attest to a filled-in sheet.
 
 The current source revision has SHA-256
 `fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6`.
-Its ciphertext verification labels are `Expected Ciphertext CRC32:` and
-`8 hex digits`, with eight 20-by-20-point cells per keeper. The two relocated
-`FIRST 2 CIPHER GROUPS` use four 14.2-by-26-point cells each; the main pad
-grid remains twenty groups of four 16-by-26-point cells.
+The asset script asserts the reviewed labels, the header literal `3 OF 5  |`,
+and the 400 pad cells (16 by 26 points) before bundling.
 
-The reviewed revision uses a 200-point keeper stride, with pad-row bottoms at
-1294.78 and 1248.78 points in the first card, prefix-box bottoms at 1186.78,
-and CRC32-box bottoms at 1207.78. It removes the authentication/notice and
-release-due header fields and provides seven blank account/wallet rows.
-Recovery steps 6–8 are retained verbatim, including step 6's literal `into a HW`
-ending; no missing instruction text is guessed or supplied.
-
-The asset script pins the reviewed source hash and checks these checksum labels
-and cell geometry before bundling. The generator fills only contacts and the
-explicit 80-letter private K-pad grid; ciphertext prefixes and CRC32 cells stay
-blank, and it never computes a checksum of a pad. The source's seven-day release
-instruction stays intact in the canonical PDF; only the derivative replaces it
-with the agreed-release-policy wording.
-
-The derivative keeps seven 17-point contact rows for the existing exact-text,
-actual-ink, minimum-8pt fit guarantees instead of the source's 14.5-point rows.
-Only the ten ciphertext-prefix group-number headings move down 3.25 points and
-reduce from 10pt to 9.5pt to avoid collision with those contact rows. Their
-text and all ciphertext-prefix, CRC32, and K-pad entry-box geometry are retained.
+Values are written on the template's own geometry: the seven contact rules per
+share (14.5-point pitch, ending at x=335; values fitted on one line from 11pt
+down to 7pt) and the twenty four-cell pad groups (letters at 15pt, centred).
+Ciphertext prefixes, CRC32 cells and wallet rows stay blank, and the generator
+never computes a checksum of a pad. For 3-of-3 and 3-of-4 sheets the only change
+to the template stream is the share-count digit in the header literal.
 
 DejaVu Sans is embedded with subsetting in each PDF. Its license is included as
 `DejaVuSans-LICENSE.txt`. Latin accents, Greek, Cyrillic, and other characters in

@@ -19,9 +19,9 @@ const {
   standaloneRecoveryUrl: STANDALONE_URL,
 } = publicNavigationUrls(globalThis.location, globalThis.origin);
 const FIELD_LABELS = {
-  name: "Sharekeeper name", reference: "Account / reference",
-  phone: "Phone number", email: "Email address", website: "Website",
-  address1: "Street address", address2: "Address line 2", region: "State, country, and postal code",
+  name: "Name", reference: "Account No.",
+  phone: "Phone", website: "Website",
+  address1: "Street Address", address2: "Street Address 2", region: "State/Country Postal Code",
 };
 
 function App() {
@@ -171,7 +171,7 @@ function App() {
     const id = `keeper-${keeper.id}-${name}`;
     return <div className={`field ${name === "website" || name === "region" ? "wide" : ""}`} key={name}>
       <label htmlFor={id}>{FIELD_LABELS[name]}{optional && <span>Optional</span>}</label>
-      <input id={id} data-testid={`input-${name}`} type={name === "email" ? "email" : name === "phone" ? "tel" : "text"}
+      <input id={id} data-testid={`input-${name}`} type={name === "phone" ? "tel" : "text"}
         autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false"
         value={keeper[name]} onChange={(e) => updateKeeper(name, e.target.value)}
         aria-invalid={!!errors[name]} aria-describedby={errors[name] ? `${id}-error` : undefined} />
@@ -231,7 +231,7 @@ function App() {
             <p className="subheading">Use independently verified details. Add a name and at least one contact channel; the rest can be completed on paper.</p>
             <div className="keeper-tabs" aria-label="Select sharekeeper">{activeKeepers.map((k, i) => <button key={k.id} type="button" className={i === keeperIndex ? "selected" : ""} aria-pressed={i === keeperIndex} onClick={() => { setKeeperIndex(i); setErrors({}); }} data-testid={`keeper-tab-${i + 1}`}>{String(i + 1).padStart(2, "0")}{!Object.keys(contactErrors(k)).length && <Check size={13} aria-hidden="true" />}</button>)}</div>
             <form onSubmit={nextKeeper} noValidate autoComplete="off">
-              <div className="form-grid">{field("name")}{field("reference", true)}{field("phone")}{field("email", true)}{field("website", true)}</div>
+              <div className="form-grid">{field("name")}{field("reference", true)}{field("phone")}{field("website", true)}</div>
               <details className="address-details"><summary data-testid="toggle-address">Add postal address <span>Optional</span></summary><div className="form-grid">{field("address1", true)}{field("address2", true)}{field("region", true)}</div></details>
               <div className="actions between"><button type="button" className="secondary-button" onClick={() => keeperIndex ? setKeeperIndex(keeperIndex - 1) : go(0)} data-testid="button-back"><ArrowLeft size={16} aria-hidden="true" /> Back</button><button type="submit" className="primary-button" data-testid="button-next-keeper">{keeperIndex < count - 1 ? "Next sharekeeper" : "Continue to entropy"}<ArrowRight size={17} aria-hidden="true" /></button></div>
             </form>
@@ -259,9 +259,9 @@ function App() {
             <p className="eyebrow">Step 04 / Review</p>
             <h2 id="step-heading" tabIndex="-1" ref={headingRef}>Check the details before creating keys.</h2>
             <p className="subheading">Each sharekeeper gets its own {PAD_LENGTH}-letter pad. No keys have been generated yet.</p>
-            <div className="contact-review">{activeKeepers.map((k, i) => <article key={k.id} className="review-row"><span className="row-number">{String(i + 1).padStart(2, "0")}</span><div><h3>{k.name || "Contact details missing"}</h3><p>{k.phone || k.email || k.website || k.address1 || "Add a contact channel"}</p></div><button className="text-button" disabled={busy} onClick={() => { setKeeperIndex(i); go(1); }} data-testid={`edit-keeper-${i + 1}`}>Edit</button></article>)}</div>
+            <div className="contact-review">{activeKeepers.map((k, i) => <article key={k.id} className="review-row"><span className="row-number">{String(i + 1).padStart(2, "0")}</span><div><h3>{k.name || "Contact details missing"}</h3><p>{k.phone || k.website || k.address1 || "Add a contact channel"}</p></div><button className="text-button" disabled={busy} onClick={() => { setKeeperIndex(i); go(1); }} data-testid={`edit-keeper-${i + 1}`}>Edit</button></article>)}</div>
             <div className="mix-summary"><Fingerprint size={20} aria-hidden="true" /><div><strong>Two sources, one local generation</strong><p>Browser CSPRNG + {movement.current.length} user movement/timing samples → HKDF-SHA-256 → unbiased A–Z selection.</p></div></div>
-            <p className="technical-note">The PDF will label the filled boxes as secret pad K. Ciphertext groups, the eight-digit ciphertext CRC32 checksum, and wallet passphrases stay blank; this is not a complete backup. The tool does not choose a release-delay policy.</p>
+            <p className="technical-note">The PDF is the published sample sheet, unchanged, with each sharekeeper’s contact details and secret pad K written into its share section. First cipher groups, the eight-digit ciphertext CRC32, and wallet passphrases stay blank for you to fill in; this is not a complete backup.</p>
             <div className="acknowledgments">{[
               "I understand this is an unaudited prototype and will test the complete recovery process offline before relying on it.",
               "I will keep the generated PDF private. Pads must never be sent to a sharekeeper.",
@@ -291,7 +291,7 @@ function App() {
         <p className="eyebrow">The document</p>
         <div className="paper-preview" aria-hidden="true">
           <div className="paper-title">SHAREKEEPER</div><div className="paper-subtitle">PRIVATE PAD WORKSHEET · 3 OF {count}</div><div className="paper-instructions" />
-          {Array.from({ length: 5 }, (_, i) => <div className={`paper-share ${i >= count ? "unused" : ""}`} key={i}><div className="paper-share-header"><strong>SHARE {String(i + 1).padStart(2, "0")}</strong><span>{i >= count ? "NOT USED" : ""}</span></div><div className="paper-share-content"><div className="paper-contact">{i < count && keepers[i].name ? keepers[i].name : <><i /><i /><i /></>}</div><div className="paper-grid">{Array.from({ length: 20 }, (_, j) => <i key={j} />)}</div></div><div className="paper-hash" /></div>)}
+          {Array.from({ length: 5 }, (_, i) => <div className={`paper-share ${i >= count ? "unused" : ""}`} key={i}><div className="paper-share-header"><strong>SHARE {String(i + 1).padStart(2, "0")}</strong><span>{i >= count ? "LEFT BLANK" : ""}</span></div><div className="paper-share-content"><div className="paper-contact">{i < count && keepers[i].name ? keepers[i].name : <><i /><i /><i /></>}</div><div className="paper-grid">{Array.from({ length: 20 }, (_, j) => <i key={j} />)}</div></div><div className="paper-hash" /></div>)}
           <div className="paper-wallets"><span>ACCOUNTS / WALLET PASSPHRASES</span>{Array.from({ length: 7 }, (_, i) => <i key={i} />)}</div>
         </div>
         <p className="preview-caption">Layout preview · no secret keys shown</p>

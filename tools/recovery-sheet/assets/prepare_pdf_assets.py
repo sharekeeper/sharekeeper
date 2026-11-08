@@ -3,14 +3,15 @@
 Run from the repository root:
   python tools/recovery-sheet/assets/prepare_pdf_assets.py
 
-The original source PDF is never overwritten. Only exact, reviewed static labels
-that pdf.js redraws are removed, so obsolete policy text is not searchable behind
-an opaque overlay. A new page-only document drops original Content Credentials
-attachments and catalog claims, which do not attest to the modified worksheet.
+The original source PDF is never overwritten and is bundled byte for byte. The
+generated sheet reproduces its page unchanged and only writes contacts and pads
+into the blank fields. Copying only the page into a new document drops the
+source's Content Credentials attachments and catalog claims, which do not attest
+to a filled-in sheet.
 """
 
 from base64 import b64encode
-from io import BytesIO
+
 from hashlib import sha256
 from pathlib import Path
 import re
@@ -27,76 +28,27 @@ COPYRIGHT = Path("/usr/share/doc/fonts-dejavu-core/copyright")
 source_hash = sha256(SOURCE.read_bytes()).hexdigest()
 assert source_hash == EXPECTED_SOURCE_SHA256, "Source template changed: review its labels and geometry before rebundling"
 reader = pypdf.PdfReader(SOURCE)
-writer = pypdf.PdfWriter()
-page = writer.add_page(reader.pages[0])
-stream = page.get_contents().get_data().decode("latin1")
-# These source literals and entry rectangles are retained, never populated.
-# The source checksum is CRC32 of ciphertext, not SHA-256 or a checksum of K.
+stream = reader.pages[0].get_contents().get_data().decode("latin1")
+# Reviewed source facts the generator relies on. The template itself is bundled
+# byte for byte; the generator only writes into its blank fields.
 assert stream.count("(Expected Ciphertext CRC32:)") == 5
 assert stream.count("(8 hex digits)") == 5
 assert stream.count("(FIRST 2 CIPHER GROUPS)") == 5
-assert "(5. Receive all 20 groups; verify the stored CRC32 before decryption.)" in stream
-assert "(6. Decrypt locally on scratch paper. Enter each four-letter word prefix into a HW)" in stream
-assert "(7. Destroy scratch paper after entering into a HW wallet.)" in stream
-assert "(8. Sign and broadcast a tx, then wipe the HW wallet clean.)" in stream
-assert "(Authentication / notice" not in stream
-assert "(Release due" not in stream
+assert stream.count("(3 OF 5  |") == 1
+for label in ("(Name:)", "(Street Address:)", "(Street Address 2:)", "(State/Country Postal Code:)",
+              "(Account No.:)", "(Phone:)", "(Website:)"):
+    assert stream.count(label) == 5, label
 assert stream.count("(Empty)") == 7
-assert "SHA-256" not in stream
 rectangles = re.findall(r"^n ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re S$", stream, re.MULTILINE)
-assert sum(width == "20" and height == "20" for _, _, width, height in rectangles) == 40
-for slot in range(5):
-    for cell in range(8):
-        expected = (f"{575.4121 + cell * 20:.4f}", f"{1207.78 - slot * 200:.2f}", "20", "20")
-        assert expected in rectangles, f"Source CRC32 cell moved: {expected}"
-# The source's 14.5pt contact rows are too short for the derivative's exact
-# two-line email/web values at >=8pt. Keep seven 17pt derivative rows. Only the
-# ten prefix group-number headings move down 3.25pt and reduce 10 -> 9.5pt to
-# clear those rows; their text and the blank prefix boxes are not changed.
-for slot in range(5):
-    for x, label in (("222.442", "01"), ("290.442", "02")):
-        old = (
-            f"BT 1 0 0 1 {x} {1216.78 - slot * 200:.2f} Tm "
-            f"/F2+0 10 Tf 12 TL ({label}) Tj T* ET"
-        )
-        new = (
-            f"BT 1 0 0 1 {x} {1213.53 - slot * 200:.2f} Tm "
-            f"/F2+0 9.5 Tf 11.4 TL ({label}) Tj T* ET"
-        )
-        assert stream.count(old) == 1, f"Source prefix heading changed: {old}"
-        stream = stream.replace(old, new)
-contact_labels = (
-    "(Name:)", "(Street Address:)", "(Street Address 2:)",
-    "(State/Country Postal Code:)", "(Account No.:)", "(Phone:)", "(Website:)",
-)
-removed = []
-kept = []
-for line in stream.splitlines():
-    replace = line.startswith("BT ") and (
-        "(3 OF 5  |" in line
-        or "(4. Complete agreed ID checks;" in line
-        or re.search(r"\(SHARE 0[1-5]\)", line)
-        or any(label in line for label in contact_labels)
-        or "(Empty)" in line
-    )
-    (removed if replace else kept).append(line)
-assert len(removed) == 49, f"Source template changed: reviewed 49 replacements, got {len(removed)}"
-content = pypdf.generic.DecodedStreamObject()
-content.set_data(("\n".join(kept) + "\n").encode("latin1"))
-page[pypdf.generic.NameObject("/Contents")] = writer._add_object(content)
-writer.add_metadata({
-    "/Title": "Sharekeeper recovery-sheet background, modified for private K pads",
-    "/Author": "Perplexity Computer",
-})
-buffer = BytesIO()
-writer.write(buffer)
+assert sum(width == "16" and height == "26" for _, _, width, height in rectangles) == 400
+template_bytes = SOURCE.read_bytes()
 
 HERE.joinpath("src").mkdir(exist_ok=True, parents=True)
 HERE.joinpath("src/pdf-assets.js").write_text(
     "// Generated by assets/prepare_pdf_assets.py; contains only public template/font bytes.\n"
-    "// No runtime fetch, CDN, contact data, pad data, or original Content Credentials.\n"
+    "// No runtime fetch, CDN, contact data, or pad data. TEMPLATE_BASE64 is the source PDF verbatim.\n"
     f'export const SOURCE_TEMPLATE_SHA256 = "{source_hash}";\n'
-    f'export const TEMPLATE_BASE64 = "{b64encode(buffer.getvalue()).decode("ascii")}";\n'
+    f'export const TEMPLATE_BASE64 = "{b64encode(template_bytes).decode("ascii")}";\n'
     f'export const FONT_BASE64 = "{b64encode(FONT.read_bytes()).decode("ascii")}";\n',
     encoding="utf-8",
 )
@@ -104,5 +56,5 @@ HERE.joinpath("assets/DejaVuSans-LICENSE.txt").write_text(
     "\n".join(line.rstrip() for line in COPYRIGHT.read_text().splitlines()) + "\n",
     encoding="utf-8",
 )
-print(f"Bundled sanitized background ({len(buffer.getvalue())} bytes) and public DejaVu Sans font.")
+print(f"Bundled the unmodified template ({len(template_bytes)} bytes) and public DejaVu Sans font.")
 print(f"Unmodified source SHA-256: {source_hash}")

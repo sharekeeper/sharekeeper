@@ -16,7 +16,6 @@ export function blankKeeper(id) {
     region: "",
     reference: "",
     phone: "",
-    email: "",
     website: "",
   };
 }

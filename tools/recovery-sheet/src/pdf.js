@@ -1,34 +1,44 @@
-import { PDFDocument, rgb } from "pdf-lib";
+import { PDFDocument, PDFName, decodePDFRawStream, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { FONT_BASE64, TEMPLATE_BASE64 } from "./pdf-assets.js";
 import { KEEPER_COUNTS, PAD_LENGTH } from "../shared/schema.js";
 
+// The bundled template is the supplied sample PDF, byte for byte. Its page is
+// reproduced unchanged; the generator only writes values into blank fields.
+// Ink colour of the template's own body text.
 const INK = rgb(0.094118, 0.184314, 0.247059);
-const TEAL = rgb(0.078431, 0.466667, 0.509804);
-const MUTED = rgb(0.34902, 0.427451, 0.490196);
-const RULE = rgb(0.72549, 0.784314, 0.827451);
-const WHITE = rgb(1, 1, 1);
-const FIELD_KEYS = ["name", "address1", "address2", "region", "reference", "phone", "email", "website"];
-const ROWS = [
-  { field: "name", label: "Name" },
-  { field: "address1", label: "Street address" },
-  { field: "address2", label: "Address line 2" },
-  { field: "region", label: "Region / postal" },
-  { field: "reference", label: "Account / ref." },
-  { field: "phone", label: "Phone" },
-  { field: "emailWebsite", label: "Email / web" },
-];
-const CONTACT_WIDTH = 190;
-const CONTACT_ROW_HEIGHT = 17;
 const KEEPER_STRIDE = 200;
+const HEADER_LITERAL = "(3 OF 5  |";
+
+/**
+ * The template's seven contact rows, measured from the source content stream:
+ * each label is followed by a 0.65pt rule that starts after the label and ends
+ * at x=335. Rows are 14.5pt apart. Values are written on those rules.
+ */
+export const TEMPLATE_CONTACT_ROWS = Object.freeze([
+  { field: "name", label: "Name", ruleStart: 91.45, ruleY: 1322.78 },
+  { field: "address1", label: "Street Address", ruleStart: 144.85, ruleY: 1308.28 },
+  { field: "address2", label: "Street Address 2", ruleStart: 156.3, ruleY: 1293.78 },
+  { field: "region", label: "State/Country Postal Code", ruleStart: 214.09, ruleY: 1279.28 },
+  { field: "reference", label: "Account No.", ruleStart: 128.65, ruleY: 1264.78 },
+  { field: "phone", label: "Phone", ruleStart: 93.21, ruleY: 1250.28 },
+  { field: "website", label: "Website", ruleStart: 104.58, ruleY: 1235.78 },
+].map(Object.freeze));
+export const CONTACT_FIELDS = TEMPLATE_CONTACT_ROWS.map((row) => row.field);
+const RULE_END = 335;
 export const PDF_CONTACT_FRAME = Object.freeze({
-  width: CONTACT_WIDTH,
-  height: CONTACT_ROW_HEIGHT,
-  topInset: 0.5,
-  bottomInset: 0.5,
-  lineGap: 0.5,
-  ruleThickness: 0.35,
+  rowPitch: 14.5,
+  ruleThickness: 0.65,
+  textInset: 2,
+  rightInset: 1,
+  baselineAboveRule: 2,
+  maxSize: 11,
+  minSize: 7,
 });
+// Pad cells: 16 x 26pt, ten groups of four per row, two rows 46pt apart,
+// groups 78.8551pt apart; first cell bottom-left at (371, 1294.78).
+export const PAD_CELL = Object.freeze({ x: 371, y: 1294.78, width: 16, height: 26, groupPitch: 78.8551, rowPitch: 46 });
+export const PAD_LETTER_SIZE = 15;
 let glyphMetricFont;
 
 function decodeBase64(base64) {
@@ -42,45 +52,12 @@ function requireKeepers(keepers) {
   }
 }
 
-function contactRows(keeper) {
-  return ROWS.map((row) => ({
-    ...row,
-    value: row.field === "emailWebsite"
-      ? [keeper.email, keeper.website].filter((value) => value !== "").join("\n")
-      : keeper[row.field],
-  }));
-}
-
-/**
- * Preserve explicit line breaks. Wrap without elision, including long unbroken
- * URLs; never abbreviate, transliterate, or silently discard a contact character.
- */
-export function wrapPdfText(text, font, size, maxWidth) {
-  const result = [];
-  for (const paragraph of text.replace(/\r\n?/g, "\n").split("\n")) {
-    let line = "";
-    for (const character of paragraph) {
-      const candidate = line + character;
-      if (line && font.widthOfTextAtSize(candidate, size) > maxWidth) {
-        result.push(line);
-        line = character;
-      } else {
-        line = candidate;
-      }
-      if (font.widthOfTextAtSize(line, size) > maxWidth) return null;
-    }
-    result.push(line);
-  }
-  return result;
-}
-
 /** Actual shaped glyph-ink bounds, in PDF points relative to the baseline. */
 export function measurePdfGlyphBounds(text, size) {
   glyphMetricFont ??= fontkit.create(decodeBase64(FONT_BASE64));
   const run = glyphMetricFont.layout(text);
   const scale = size / glyphMetricFont.unitsPerEm;
   let penX = 0;
-  let penY = 0;
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
@@ -91,56 +68,34 @@ export function measurePdfGlyphBounds(text, size) {
     if (Number.isFinite(box.minX) && Number.isFinite(box.minY) &&
         (box.maxX !== box.minX || box.maxY !== box.minY)) {
       const x = penX + position.xOffset;
-      const y = penY + position.yOffset;
       minX = Math.min(minX, x + box.minX);
       maxX = Math.max(maxX, x + box.maxX);
-      minY = Math.min(minY, y + box.minY);
-      maxY = Math.max(maxY, y + box.maxY);
+      minY = Math.min(minY, position.yOffset + box.minY);
+      maxY = Math.max(maxY, position.yOffset + box.maxY);
     }
     penX += position.xAdvance;
-    penY += position.yAdvance;
   });
-  if (!Number.isFinite(minY)) {
-    // Give an intentional empty/space-only line a normal line slot, without
-    // inventing visible ink or collapsing a user-specified line break.
-    const empty = measurePdfGlyphBounds("Mg", size);
-    return { minX: 0, maxX: penX * scale, minY: empty.minY, maxY: empty.maxY };
-  }
-  return {
-    minX: minX * scale,
-    maxX: Math.max(maxX, penX) * scale,
-    minY: minY * scale,
-    maxY: maxY * scale,
-  };
+  if (!Number.isFinite(minY)) return { minX: 0, maxX: penX * scale, minY: 0, maxY: 0 };
+  return { minX: minX * scale, maxX: Math.max(maxX, penX) * scale, minY: minY * scale, maxY: maxY * scale };
 }
 
-export function fitPdfContact(text, font) {
-  // At least 8pt, at most two lines. Fit actual shaped ink, not font-size boxes:
-  // ordinary 8pt email/web lines are 7.7422pt high, including descenders.
+/**
+ * Fit one value on its template row: a single line, largest size from 11pt
+ * down to 7pt whose actual ink stays between the rule start and x=335 and
+ * below the next row up. Returns null instead of truncating or wrapping.
+ */
+export function fitPdfContact(text, font, row) {
   const frame = PDF_CONTACT_FRAME;
-  const usableHeight = frame.height - frame.topInset - frame.bottomInset;
-  for (let size = 11; size >= 8; size -= 0.25) {
-    const lines = wrapPdfText(text, font, size, CONTACT_WIDTH);
-    if (!lines || lines.length > 2) continue;
-    const metrics = lines.map((line) => measurePdfGlyphBounds(line, size));
-    if (metrics.some((bounds) => bounds.maxX - Math.min(0, bounds.minX) > frame.width)) continue;
-    const totalHeight = metrics.reduce((sum, bounds) => sum + bounds.maxY - bounds.minY, 0) +
-      frame.lineGap * (lines.length - 1);
-    if (totalHeight > usableHeight) continue;
-    let cursor = frame.topInset + (usableHeight - totalHeight) / 2;
-    const placements = metrics.map((bounds) => {
-      const baselineOffset = cursor + bounds.maxY;
-      const placement = {
-        ...bounds,
-        baselineOffset,
-        xOffset: -Math.min(0, bounds.minX),
-        top: cursor,
-        bottom: baselineOffset - bounds.minY,
-      };
-      cursor = placement.bottom + frame.lineGap;
-      return placement;
-    });
-    return { lines, size, placements, frame };
+  if (text === "") return { size: frame.maxSize, x: row.ruleStart + frame.textInset, y: row.ruleY + frame.baselineAboveRule };
+  if (/[\r\n]/.test(text)) return null;
+  const width = RULE_END - frame.rightInset - (row.ruleStart + frame.textInset);
+  // Highest permitted ink: just below the rule of the row above.
+  const ceiling = frame.rowPitch - frame.ruleThickness / 2 - 0.5 - frame.baselineAboveRule;
+  for (let size = frame.maxSize; size >= frame.minSize; size -= 0.25) {
+    if (font.widthOfTextAtSize(text, size) > width) continue;
+    const bounds = measurePdfGlyphBounds(text, size);
+    if (bounds.maxX - Math.min(0, bounds.minX) > width || bounds.maxY > ceiling) continue;
+    return { size, x: row.ruleStart + frame.textInset - Math.min(0, bounds.minX), y: row.ruleY + frame.baselineAboveRule, bounds };
   }
   return null;
 }
@@ -161,17 +116,15 @@ function validateAndLayout(keepers, font) {
       return [];
     }
     let invalid = false;
-    for (const field of FIELD_KEYS) {
+    for (const field of CONTACT_FIELDS) {
       const value = keeper[field];
       if (typeof value !== "string") {
         error(field, `${field} must be text.`);
         invalid = true;
         continue;
       }
-      const unsupported = [...new Set([...value].filter((character) => {
-        const codePoint = character.codePointAt(0);
-        return character !== "\n" && character !== "\r" && !supported.has(codePoint);
-      }))];
+      const unsupported = [...new Set([...value].filter((character) =>
+        !/[\u0000-\u001F\u007F]/u.test(character) && !supported.has(character.codePointAt(0))))];
       if (unsupported.length) {
         const codePoints = unsupported.map((character) =>
           `U+${character.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}`,
@@ -179,8 +132,8 @@ function validateAndLayout(keepers, font) {
         error(field, `${field} contains characters not supported by the PDF font (${codePoints}). Use a supported spelling; no characters were discarded.`);
         invalid = true;
       }
-      if (/[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F]/u.test(value)) {
-        error(field, `${field} contains unsupported control characters.`);
+      if (/[\u0000-\u001F\u007F]/u.test(value)) {
+        error(field, `${field} contains line breaks or control characters; each template row holds one line.`);
         invalid = true;
       }
     }
@@ -188,12 +141,13 @@ function validateAndLayout(keepers, font) {
       error("name", "a keeper name is required.");
     }
     if (invalid) return [];
-    return contactRows(keeper).map((row) => {
-      const fit = fitPdfContact(row.value, font);
+    return TEMPLATE_CONTACT_ROWS.map((row) => {
+      const value = keeper[row.field];
+      const fit = fitPdfContact(value, font, row);
       if (!fit) {
-        error(row.field, `${row.label} is too long for the original PDF contact area. Shorten it or use the separate address lines; nothing was truncated.`);
+        error(row.field, `${row.label} is too long for its line on the recovery sheet. Shorten it; nothing was truncated.`);
       }
-      return { ...row, fit };
+      return { ...row, value, fit };
     });
   });
   return { errors, layouts };
@@ -206,58 +160,61 @@ async function documentAndFont() {
   return { document, font };
 }
 
-/** Check export-only glyph and original-template fit constraints, without pads. */
+/** Check export-only glyph and template fit constraints, without pads. */
 export async function validatePdfContacts(keepers) {
   const { font } = await documentAndFont();
   return validateAndLayout(keepers, font).errors;
 }
 
-function text(page, font, value, x, y, size, color = INK) {
-  page.drawText(value, { x, y, size, font, color });
+/**
+ * Load the untouched template. For 3-of-3 and 3-of-4 sheets only the share
+ * count digit in the header literal changes, in the template's own font.
+ */
+async function templatePage(count) {
+  const template = await PDFDocument.load(decodeBase64(TEMPLATE_BASE64), { updateMetadata: false });
+  const page = template.getPage(0);
+  if (count !== 5) {
+    const contents = page.node.Contents();
+    if (!contents || typeof contents.asArray === "function") throw new Error("Unexpected template content structure.");
+    const decoded = new TextDecoder("latin1").decode(decodePDFRawStream(contents).decode());
+    const occurrences = decoded.split(HEADER_LITERAL).length - 1;
+    if (occurrences !== 1) throw new Error("Template header changed; review before export.");
+    const updated = decoded.replace(HEADER_LITERAL, `(3 OF ${count}  |`);
+    const bytes = Uint8Array.from(updated, (character) => character.charCodeAt(0));
+    page.node.set(PDFName.of("Contents"), template.context.register(template.context.flateStream(bytes)));
+  }
+  return template;
 }
 
 function drawContacts(page, font, rows, offset) {
-  // Keep seven descender-safe 17pt derivative rows instead of the source's
-  // 14.5pt rows. The first row starts 0.5pt below the card header. Prefix-number
-  // headings are lowered 3.25pt in the derivative background to clear our final
-  // rule at y1221.28; their blank entry boxes still end at source y1212.78.
-  page.drawRectangle({ x: 41, y: 1220.78 - offset, width: 297, height: 119.5, color: WHITE });
-  rows.forEach((row, index) => {
-    const top = 1340.28 - offset - index * CONTACT_ROW_HEIGHT;
-    text(page, font, row.label, 43, top - 10.7, 8.4, MUTED);
-    const fit = row.fit;
-    fit.lines.forEach((line, lineIndex) => {
-      const placement = fit.placements[lineIndex];
-      text(page, font, line, 145 + placement.xOffset, top - placement.baselineOffset, fit.size);
-    });
-    page.drawLine({
-      start: { x: 145, y: top - CONTACT_ROW_HEIGHT },
-      end: { x: 335, y: top - CONTACT_ROW_HEIGHT },
-      thickness: PDF_CONTACT_FRAME.ruleThickness,
-      color: RULE,
-    });
-  });
+  for (const row of rows) {
+    if (!row.value) continue;
+    page.drawText(row.value, { x: row.fit.x, y: row.fit.y - offset, size: row.fit.size, font, color: INK });
+  }
 }
 
 function drawPad(page, font, pad, offset) {
-  // Measured original source rectangles: 16x26pt cells; ten groups per row,
-  // two rows; columns are 78.8551pt apart. One letter is centered in each box.
+  const capHeight = measurePdfGlyphBounds("H", PAD_LETTER_SIZE).maxY;
   for (let index = 0; index < PAD_LENGTH; index += 1) {
     const group = Math.floor(index / 4);
-    const column = group % 10;
-    const row = Math.floor(group / 10);
-    const cellX = 371 + column * 78.8551 + (index % 4) * 16;
-    const cellY = 1294.78 - row * 46 - offset;
-    const size = 17;
-    const width = font.widthOfTextAtSize(pad[index], size);
-    text(page, font, pad[index], cellX + (16 - width) / 2, cellY + 6.6, size);
+    const cellX = PAD_CELL.x + (group % 10) * PAD_CELL.groupPitch + (index % 4) * PAD_CELL.width;
+    const cellY = PAD_CELL.y - Math.floor(group / 10) * PAD_CELL.rowPitch - offset;
+    const width = font.widthOfTextAtSize(pad[index], PAD_LETTER_SIZE);
+    page.drawText(pad[index], {
+      x: cellX + (PAD_CELL.width - width) / 2,
+      y: cellY + (PAD_CELL.height - capHeight) / 2,
+      size: PAD_LETTER_SIZE,
+      font,
+      color: INK,
+    });
   }
 }
 
 /**
- * Generate a one-page A2 private-K recovery worksheet entirely in browser
- * memory. Contacts and pads are never fetched, persisted, logged, or uploaded.
- * This creates no mnemonic, ciphertext, ciphertext prefixes, or checksum.
+ * Generate the one-page A2 recovery sheet entirely in browser memory: the
+ * supplied template page, unchanged, with contacts and private pads written
+ * into its blank fields. Contacts and pads are never fetched, persisted,
+ * logged, or uploaded. Ciphertext prefixes, CRC32 and wallet rows stay blank.
  */
 export async function createRecoveryPdf({ keepers, pads, entropySummary }) {
   requireKeepers(keepers);
@@ -278,41 +235,21 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary }) {
     throw error;
   }
 
-  const background = await PDFDocument.load(decodeBase64(TEMPLATE_BASE64), { updateMetadata: false });
-  const [page] = await document.copyPages(background, [0]);
+  const template = await templatePage(keepers.length);
+  const [page] = await document.copyPages(template, [0]);
   document.addPage(page);
-  document.setTitle(`Sharekeeper private K pads: 3 of ${keepers.length} recovery worksheet`);
-  document.setAuthor("Perplexity Computer");
-  document.setSubject("Unaudited prototype; private 80-letter K pads only. No ciphertext or mnemonic generated.");
+  document.setTitle(`Sharekeeper SLIP-39 recovery sheet: 3 of ${keepers.length}`);
+  document.setSubject(entropySummary === undefined
+    ? "Private recovery sheet with 80-letter pads. Unaudited prototype."
+    : "Private recovery sheet with 80-letter pads (browser CSPRNG + user input, HKDF-SHA-256). Unaudited prototype.");
   document.setCreator("Sharekeeper browser-only recovery-sheet tool");
   document.setProducer("pdf-lib / Sharekeeper");
-  document.setKeywords(["Sharekeeper", "private K pads", "prototype", "80 letters", "20 groups of 4"]);
+  document.setKeywords(["Sharekeeper", "recovery sheet", "private pads", "prototype"]);
 
-  text(page, font, `3 OF ${keepers.length}  |  PRIVATE K PADS  |  80 LETTERS / 20 x 4`, 698, 1628.78, 11.1, TEAL);
-  text(page, font, "4. Follow the agreed release policy; record the notice and release time.", 43, 1494.78, 13.4362);
-  text(page, font, "PRIVATE K PADS: 80 A-Z letters per keeper, arranged as 20 groups x 4. Keep separate from ciphertext.", 43, 1466.78, 11.4, TEAL);
-  text(page, font, "Prototype, not audited. No ciphertext or mnemonic generated. No fixed release delay has been verified.", 43, 1449.78, 10.6, MUTED);
-
-  for (let index = 0; index < 5; index += 1) {
+  keepers.forEach((_, index) => {
     const offset = index * KEEPER_STRIDE;
-    if (index >= keepers.length) {
-      // No fake contacts, pad letters, authentication values, or checksums.
-      page.drawRectangle({ x: 31, y: 1178.78 - offset, width: 1128.5, height: 189, color: WHITE });
-      text(page, font, `SLOT ${String(index + 1).padStart(2, "0")}  |  NOT USED`, 43, 1349.78 - offset, 14, MUTED);
-      text(page, font, `This worksheet uses 3 of ${keepers.length} keepers. No pad or contact is assigned to this slot.`, 371, 1280.78 - offset, 12, MUTED);
-      continue;
-    }
-    text(page, font, `KEEPER ${String(index + 1).padStart(2, "0")}  |  K (PRIVATE PAD)`, 43, 1349.78 - offset, 12, TEAL);
     drawContacts(page, font, layouts[index], offset);
     drawPad(page, font, pads[index], offset);
-  }
-
-  text(page, font, "Ciphertext prefixes, CRC32 and the wallet/passphrase table are intentionally blank. Agree the exact ciphertext checksum profile before use.", 30, 42, 9.6, MUTED);
-  text(page, font, "Sensitive: retain privately and print securely. The modified worksheet does not preserve or claim the source PDF's Content Credentials.", 30, 27, 9.6, MUTED);
-  if (entropySummary !== undefined) {
-    // Deliberately fixed wording: never interpolate raw user-input data or
-    // convert movement counts/timing into an unsupported entropy-bit rating.
-    text(page, font, "Browser CSPRNG + user movement/timing; HKDF-SHA-256; input is not bit-rated.", 30, 12, 9.6, MUTED);
-  }
+  });
   return document.save({ useObjectStreams: true });
 }

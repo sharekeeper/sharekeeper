@@ -45,10 +45,10 @@ The hosted baseline was opened before these edits. It shows the supplied domain 
 - Open and download the blank sample from Home, Standard, or Tools.
 - Expect: The latest supplied PDF, preserved byte-for-byte, with FIRST 2 CIPHER GROUPS and an eight-hex-digit Expected Ciphertext CRC32 field.
 - For the newest uploaded revision, expect SHA-256 `fe2c68537d6fb73c28307fbb19a43c48202c09c264030c2f175c28c10dc5a1c6`, seven blank account/wallet records, and the revised, more compact keeper layout in the actual download and thumbnail. The generator's abstract sidebar miniature must also show seven wallet rows, not its older three-row placeholder.
-- Generate sheets for 3, 4, and 5 keepers. Expect: Correct private K-pad placement, blank ciphertext/CRC32/passphrase fields, and explicit inactive slots.
-- Inspect every generated keeper block against the new layout. Expect: All 80 letters remain inside the twenty four-cell groups; contact ink, prefix labels, and eight CRC32 cells do not collide; supported two-line contacts remain readable at a minimum of eight points.
+- Generate sheets for 3, 4, and 5 keepers. Expect: The page is the supplied sample, unchanged, with contacts on the seven template lines and pad letters in the pad cells; ciphertext/CRC32/passphrase fields and unused share sections stay blank; only the header share count reflects 3, 4, or 5.
+- Inspect every generated keeper block against the new layout. Expect: All 80 letters remain inside the twenty four-cell groups; contact ink, prefix labels, and eight CRC32 cells do not collide; contacts are single lines on the template rules at 7–11pt; overlong values are rejected, not truncated.
 - Expect: Educational copy distinguishes a CRC32 checksum from cryptographic authentication; the generator does not calculate a checksum of a pad and mislabel it as ciphertext.
-- The original sample's seven-day notice remains in that source. The derivative worksheet remains policy-neutral and the website explains open specification decisions.
+- The original sample's seven-day notice remains in that source. The generated sheet keeps that text exactly as in the template; the website explains open specification decisions.
 - The protocol-diagram PDF is removed from the current repository, build output, and all website/download links.
 
 ## Provider directory and review boundary
