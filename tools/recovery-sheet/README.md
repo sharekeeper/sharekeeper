@@ -84,6 +84,14 @@ The latest source revision has more compact keeper sections, no authentication/n
 
 Asset provenance and regeneration instructions are in `assets/README.md`. The derivative PDF is a printable static worksheet, not an editable AcroForm; editable template source has not been supplied.
 
+## Tools-page CRC32 calculator
+
+The separate website calculator uses CRC-32/ISO-HDLC (IEEE), with reflected polynomial `0xEDB88320`, initial value and final XOR `0xFFFFFFFF`, and an uppercase eight-hex-digit result including leading zeroes. The standard check input `123456789` produces `CBF43926`; empty input produces `00000000`.
+
+Choose UTF-8 text or a local file of at most 10 MiB. Text preserves case, spaces, and Unicode without normalization; the browser textarea represents line breaks as LF, so choose File when original bytes, BOMs, or CRLF line endings must be preserved exactly. Files are read locally and never uploaded; no input is written to browser storage. Optional expected-value comparison and clipboard copying apply only to the checksum, with a manual selection fallback if the clipboard is unavailable.
+
+This explicit utility profile does not finalize the Sharekeeper ciphertext encoding or CRC32 serialization. The private recovery generator and its offline copy remain unchanged and do not import this calculator or fill any ciphertext/CRC32 fields automatically.
+
 ## Verification
 
 `npm test` covers both entropy inputs, rejection sampling, unsupported environments, buffer cleanup, all three keeper counts, exact pad placement, international font coverage, overflow failures, and contact geometry. `QA.md` contains the functional and visual browser acceptance inventory.

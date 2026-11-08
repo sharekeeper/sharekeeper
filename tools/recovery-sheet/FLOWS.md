@@ -2,6 +2,28 @@
 
 The hosted baseline was opened before these edits. It shows the supplied domain logo, the setup question, 3/4/5 keeper choices, and the fixed-threshold explanation; the recovery application has no database or persistent user storage.
 
+## Local CRC32 calculator
+
+- Baseline: The live Tools page was opened before editing and contains the recovery generator, boundaries, and reference downloads, but no checksum calculator.
+- Add a clearly labeled CRC32 checksum calculator directly on Tools, matching the existing navy/cyan design at desktop and 375 px.
+- Select UTF-8 text, enter `123456789`, and calculate. Expect `CBF43926` and nine input bytes; an empty input must produce `00000000`.
+- Preserve case, spaces, and the displayed text's line breaks. Explain textarea LF line endings and use File for exact original bytes. Do not silently choose a ciphertext serialization or populate the recovery sheet.
+- Select File, choose a synthetic local binary file, and calculate. Expect the independent zlib checksum of the exact bytes; there must be no upload or network request.
+- Enter an optional expected eight-hex-digit checksum. Expect distinct match, mismatch, and invalid-format states without relying on color alone; allow lowercase hex.
+- Change input after calculating, switch modes, and clear. Expect stale results to disappear and in-flight file reads not to restore cleared or obsolete results.
+- Reject inputs over 10 MiB without clipping, show readable errors, and keep all data in this page's memory only. Navigating away resets the calculator.
+- Copy the checksum using a real button; verify the clipboard when available and a truthful manual-copy fallback when unavailable.
+- Keep CRC-32/ISO-HDLC (IEEE) parameters explicit, distinguish error detection from authentication, and preserve the standard's unresolved serialization decisions.
+- Replay all six routes, threshold controls, FAQs, directory filtering, provider form/draft controls, and the independent recovery generator/PDF/offline flows. No actual provider submission or publication is authorized by this change.
+
+### CRC32 addition verification
+
+- The 74-test suite and independent security review pass. Real browser checks cover standard/empty/leading-zero/Unicode values, binary-file checksums, match/mismatch/invalid comparison, real clipboard copying, oversize rejection, input clearing, and no network requests during calculator use.
+- A separate fault-injected browser confirms truthful clipboard-denial fallback and stale file-read protection after clearing, changing mode, calculating new input, or navigating away.
+- All six routes pass desktop/375 px checks; threshold toggles, six FAQs, five TOC links, directory filters, unknown-route recovery, and local application-draft validation/download/edit/reset pass.
+- Generated real 3/4/5-keeper PDFs pass qpdf checks, repeat downloads are identical, and reveal/hide plus clear cancel/confirm work. The pristine downloaded offline copy generates a four-keeper PDF with networking disabled and no HTTP requests.
+- External intake limitation observed during this regression: the native Google Form now asks an anonymous visitor to sign in to Google, and its embedded view could not be verified. The existing responder URL and all Google settings were left untouched; no application was submitted. This is not covered by the local CRC32 success checks.
+
 ## Full website and navigation
 
 - Start: Home at the existing public website address.

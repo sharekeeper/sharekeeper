@@ -195,6 +195,53 @@ dd { margin: 0; }
 .faq-list details[open] summary svg { transform: rotate(180deg); }
 .faq-list details > p { padding-inline: var(--space-5); }
 .faq-list details > p:last-child { padding-bottom: var(--space-5); }
+.crc-tool { display: grid; grid-template-columns: .9fr 1.1fr; gap: var(--space-16); align-items: start; margin-block: var(--space-6) var(--space-24); padding-top: var(--space-8); border-top: 1px solid var(--field-border); }
+.crc-kicker { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-small); font-weight: 600; margin-bottom: var(--space-5); }
+.crc-tool-intro > h2 { max-width: 16ch; }
+.crc-tool-intro > p, .crc-profile-note { margin-top: var(--space-5); }
+.crc-safety { display: flex; align-items: flex-start; gap: var(--space-3); margin-top: var(--space-6); padding: var(--space-5); background: var(--ice); font-size: var(--text-small); }
+.crc-safety > svg { margin-top: var(--space-1); }
+.crc-specification { margin-top: var(--space-6); border-block: 1px solid var(--field-border); padding-block: var(--space-4); font-size: var(--text-small); }
+.crc-specification > summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+.crc-specification p { margin-top: var(--space-4); }
+.crc-specification > a { display: inline-block; margin-top: var(--space-4); }
+.crc-specification code { overflow-wrap: anywhere; }
+.crc-profile-note { color: var(--muted); }
+.crc-calculator { min-width: 0; padding: var(--space-8); background: var(--paper); display: grid; gap: var(--space-5); }
+.crc-mode { display: flex; flex-wrap: wrap; gap: var(--space-4); border: 0; padding: 0; min-width: 0; }
+.crc-mode > legend { font-weight: 600; margin-bottom: var(--space-2); }
+.crc-mode > label { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; cursor: pointer; }
+.crc-mode input[type="radio"] { width: 18px; min-width: 18px; height: 18px; min-height: 18px; padding: 0; accent-color: var(--navy); }
+.crc-calculator textarea { min-height: 128px; }
+.crc-calculator input[type="file"] { padding: var(--space-3); font-size: var(--text-small); }
+.crc-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-4); }
+.crc-actions .text-link { min-height: 44px; font-size: var(--text-small); }
+.crc-result { padding: var(--space-5); border-left: 4px solid var(--navy); background: var(--white); min-width: 0; }
+.crc-result > label { font-size: var(--text-small); font-weight: 600; }
+.crc-result > input { border: 0; padding: var(--space-1) 0; font-family: ui-monospace, "Courier New", monospace; font-size: var(--text-section); font-weight: 600; letter-spacing: .05em; min-height: 56px; background: transparent; }
+.crc-result > input::placeholder { font-family: var(--font-body); font-size: var(--text-heading); font-weight: 400; letter-spacing: 0; color: var(--muted); opacity: 1; }
+.crc-result > p { font-size: var(--text-small); color: var(--muted); overflow-wrap: anywhere; }
+.crc-copy { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; margin-top: var(--space-2); background: transparent; padding: var(--space-1) 0; font-size: var(--text-small); text-decoration: underline; text-underline-offset: .22em; }
+.crc-copy:disabled { color: var(--muted); text-decoration: none; }
+.crc-copy-message:empty { display: none; }
+.crc-comparison { display: flex; gap: var(--space-2); align-items: flex-start; font-size: var(--text-small); min-height: 44px; }
+.crc-comparison > svg { margin-top: var(--space-1); }
+@media (max-width: 900px) {
+  .crc-tool { grid-template-columns: 1fr; gap: var(--space-8); }
+  .crc-tool-copy { display: contents; }
+  .crc-tool-intro { order: 0; }
+  .crc-calculator { order: 1; }
+  .crc-tool-notes { order: 2; }
+  .crc-tool-intro > h2 { max-width: none; }
+  .crc-tool-notes .crc-safety { margin-top: 0; }
+}
+@media (max-width: 540px) {
+  .crc-calculator { padding: var(--space-5); }
+  .crc-actions { align-items: stretch; flex-direction: column; }
+  .crc-actions > .button { width: 100%; }
+  .crc-actions > .text-link { align-self: flex-start; }
+  .crc-result { padding: var(--space-4); }
+}
 .featured-tool { display: grid; grid-template-columns: 1.1fr 1fr; gap: var(--space-20); align-items: center; background: var(--ice); padding: var(--space-12); margin-block: var(--space-6) var(--space-24); }
 .tool-copy > p { margin-top: var(--space-6); }
 .tool-facts { list-style: none; padding: 0; margin-block: var(--space-6) var(--space-8); display: grid; gap: var(--space-3); }
