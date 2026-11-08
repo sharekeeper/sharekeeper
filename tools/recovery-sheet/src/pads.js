@@ -97,7 +97,7 @@ export function generatePads(count, cryptoSource = globalThis.crypto) {
  * Expand the user's movement/timing record into one 200-byte block for a
  * keeper pad: SHA-512 in counter mode over the whole record, with keeper,
  * block and chunk numbers as domain separation. The record is never first
- * compressed to a short hash, so the block can carry up to 1600 bits of it.
+ * compressed to a short hash. Block length is not a measure of its entropy.
  */
 async function userBlock(subtle, contribution, padIndex, blockIndex) {
   const block = new Uint8Array(SEED_BYTES);
@@ -124,7 +124,7 @@ async function userBlock(subtle, contribution, padIndex, blockIndex) {
 }
 
 /**
- * Combine a 1600-bit browser CSPRNG seed with a 1600-bit block derived from
+ * Combine a 1600-bit browser CSPRNG seed with a 1600-bit-long block derived from
  * the user's movement/timing record, for every keeper pad.
  *
  * For each pad, 200 fresh bytes from crypto.getRandomValues are XORed byte by
@@ -135,9 +135,10 @@ async function userBlock(subtle, contribution, padIndex, blockIndex) {
  * drawn only in the unlikely case that a block runs short.
  *
  * Because the CSPRNG bytes are uniform and independent of the user block, the
- * XOR is uniform whatever the user block contains; the user block also keeps
- * the pads unpredictable if the browser generator were weak. There is no
- * intermediate short key, so neither source is reduced to 256 bits. Browser
+ * XOR is uniform whatever the user block contains. If the browser generator
+ * were weak, the user block would help only to the extent the user's input is
+ * genuinely unknown and unpredictable; its 200-byte length is not an entropy
+ * claim. There is no intermediate short key or 256-bit hash. Browser
  * randomness is cryptographic pseudorandomness, not a physical true-random
  * guarantee, and this is not a claim of information-theoretic security.
  *

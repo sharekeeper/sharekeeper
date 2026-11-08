@@ -77,3 +77,16 @@ test("collection is bounded and fits the mixing input limit", () => {
   assert.ok(collector.encode().byteLength <= 262_144);
   assert.throws(() => createEntropyCollector().add({ kind: "mouse", x: 0.5, y: 0, time: 0 }), /safe integers/);
 });
+
+test("repeated position changes earn nothing (e.g. a fixed back-and-forth loop)", () => {
+  const collector = createEntropyCollector();
+  for (let i = 0; i < 2000; i += 1) collector.add({ kind: "mouse", x: (i % 2) * 10_000, y: 0, time: i * 16_000 });
+  assert.ok(collector.bits <= 4, `got ${collector.bits}`);
+  const cycle = createEntropyCollector();
+  const pattern = [[0, 0], [37, 5], [80, -11], [41, 23], [3, 9]];
+  for (let i = 0; i < 2000; i += 1) {
+    const [px, py] = pattern[i % pattern.length];
+    cycle.add({ kind: "mouse", x: px * 100, y: py * 100, time: i * 16_000 });
+  }
+  assert.ok(cycle.bits <= 20, `got ${cycle.bits}`);
+});

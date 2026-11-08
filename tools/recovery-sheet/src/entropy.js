@@ -1,15 +1,17 @@
 /**
  * Local collector for the user's movement/timing contribution, with a
- * conservative running estimate of the entropy it contains.
+ * heuristic running score (in bits) used to gate collection.
  *
  * Estimate (after the Linux kernel's input-timing estimator): for each axis,
  * take the smallest of the first, second and third differences of successive
  * values; credit floor(log2(m)) bits for that axis when m >= 2, nothing
  * otherwise. Pointer events use the x and y position in whole CSS pixels and
  * are capped at 2 bits each; straight or constant-speed motion therefore earns
- * little or nothing. Keyboard/tap events use the interval in milliseconds and
- * are capped at 4 bits each. This is a deliberately cautious heuristic for
- * gating collection, not a measurement or guarantee of unpredictability.
+ * little or nothing. A position change identical to one of the previous 16
+ * earns nothing, so simple repeated patterns stall. Keyboard/tap events use
+ * the interval in milliseconds and are capped at 4 bits each. The score only
+ * reflects arithmetic variation: it is not measured entropy, and predictable
+ * motion can still score. It gates collection; it guarantees nothing.
  *
  * Records stay in memory only. encode() returns a binary copy for mixing.
  */
@@ -19,6 +21,7 @@ const POINTER_CAP_BITS = 2;
 const TIMING_CAP_BITS = 4;
 const KIND_CODES = { mouse: 1, touch: 2, pen: 3, "tap / keyboard": 4 };
 const FIELDS = 5;
+const RECENT_DELTAS = 16;
 
 function axis() {
   return { last: null, d1: null, d2: null };
@@ -47,6 +50,8 @@ export function createEntropyCollector() {
   let x = axis();
   let y = axis();
   let t = axis();
+  let lastPixel = null;
+  const recent = [];
 
   return {
     get bits() { return bits; },
@@ -69,8 +74,15 @@ export function createEntropyCollector() {
       if (code === KIND_CODES["tap / keyboard"]) {
         credit = Math.min(TIMING_CAP_BITS, axisCredit(t, Math.round(time / 1000)));
       } else {
-        credit = Math.min(POINTER_CAP_BITS,
-          axisCredit(x, Math.round(px / 100)) + axisCredit(y, Math.round(py / 100)));
+        const pixel = [Math.round(px / 100), Math.round(py / 100)];
+        credit = Math.min(POINTER_CAP_BITS, axisCredit(x, pixel[0]) + axisCredit(y, pixel[1]));
+        if (lastPixel) {
+          const delta = `${pixel[0] - lastPixel[0]},${pixel[1] - lastPixel[1]}`;
+          if (recent.includes(delta)) credit = 0;
+          recent.push(delta);
+          if (recent.length > RECENT_DELTAS) recent.shift();
+        }
+        lastPixel = pixel;
       }
       bits += credit;
       return credit;
@@ -93,6 +105,8 @@ export function createEntropyCollector() {
       x = axis();
       y = axis();
       t = axis();
+      lastPixel = null;
+      recent.length = 0;
     },
   };
 }

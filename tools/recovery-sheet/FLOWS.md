@@ -77,7 +77,7 @@ The hosted baseline was opened before these edits. It shows the supplied domain 
 
 - Start: Add entropy.
 - Move a mouse or finger in the collection area, or use the keyboard/timing alternative.
-- Expect: Source 1 identifies browser cryptographic randomness; Source 2 identifies user movement/timing. Source 1 states a 1600-bit seed per pad. Continue is blocked until the conservative estimate reaches 1600 bits (straight or steady motion earns little); reset clears the contribution and blocks continuation again.
+- Expect: Source 1 identifies browser cryptographic randomness; Source 2 identifies user movement/timing. Source 1 states a 1600-bit seed per pad. Continue is blocked until the heuristic score reaches 1600 (straight, steady or repeated motion earns little; the score is not measured entropy); reset clears the contribution and blocks continuation again.
 - Toggle the timing input open and closed without losing the collected contribution.
 
 ## Review and generate
