@@ -4,6 +4,7 @@ import {
 } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { FONT_BASE64, TEMPLATE_BASE64 } from "./pdf-assets.js";
+import { isP2wpkhAddress } from "./btc-address.js";
 import { isValidThreshold, KEEPER_COUNTS, PAD_LENGTH, thresholdFor, thresholdOptions } from "../shared/schema.js";
 
 // The bundled template is the supplied sample PDF, byte for byte. Its page is
@@ -368,6 +369,25 @@ function drawCentered(page, font, character, cellX, cellY, width, height, size) 
   });
 }
 
+// Wallet table line 01 (template coordinates): the "Empty" passphrase box and
+// the FIRST KNOWN PUBLIC BTC ADDRESS cell (column x=776..1160.551, row
+// y=257.98..285.78). The address is fitted on one line from 15 down to 9 units.
+export const WALLET_ROW1 = Object.freeze({ emptyBox: { x: 286, y: 269.28, size: 7 }, address: { x: 785, maxX: 1152, baselineY: 266.4, maxSize: 15, minSize: 9 } });
+export function walletAddressSize(font, address) {
+  const { x, maxX, maxSize, minSize } = WALLET_ROW1.address;
+  for (let size = maxSize; size >= minSize; size -= 0.5) {
+    if (font.widthOfTextAtSize(address, size) <= maxX - x) return size;
+  }
+  throw new Error("The Bitcoin address does not fit the wallet table.");
+}
+function drawFirstWallet(page, font, address) {
+  const { x, y, size } = WALLET_ROW1.emptyBox;
+  const inset = 1.2;
+  page.drawLine({ start: { x: x + inset, y: y + inset }, end: { x: x + size - inset, y: y + size - inset }, thickness: 1.3, color: INK });
+  page.drawLine({ start: { x: x + inset, y: y + size - inset }, end: { x: x + size - inset, y: y + inset }, thickness: 1.3, color: INK });
+  page.drawText(address, { x: WALLET_ROW1.address.x, y: WALLET_ROW1.address.baselineY, size: walletAddressSize(font, address), font, color: INK });
+}
+
 function drawCipherGroups(page, font, groups, offset) {
   for (let index = 0; index < 8; index += 1) {
     const cellX = PREFIX_CELL.xs[Math.floor(index / 4)] + (index % 4) * PREFIX_CELL.width;
@@ -404,7 +424,7 @@ function drawPad(page, font, pad, offset) {
  * into its blank fields. Contacts and pads are never fetched, persisted,
  * logged, or uploaded. Ciphertext prefixes, CRC64 and wallet rows stay blank.
  */
-export async function createRecoveryPdf({ keepers, pads, entropySummary, threshold, cipherGroups, ciphertextCrcs }) {
+export async function createRecoveryPdf({ keepers, pads, entropySummary, threshold, cipherGroups, ciphertextCrcs, firstAddress }) {
   requireKeepers(keepers);
   threshold ??= thresholdFor(keepers.length);
   if (!isValidThreshold(threshold, keepers.length)) {
@@ -429,6 +449,11 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary, thresho
     !Array.isArray(ciphertextCrcs) || ciphertextCrcs.length !== keepers.length ||
     ciphertextCrcs.some((value) => typeof value !== "string" || !/^[0-9A-F]{16}$/.test(value)))) {
     throw new Error("Each keeper needs 8 cipher-group letters (A–Z) and a 16-digit uppercase hex CRC64.");
+  }
+  // Optional, offline Shamir tool only: line 01 of the wallet table gets the
+  // seed's first BIP-84 address with the passphrase marked Empty.
+  if (firstAddress !== undefined && (cipherGroups === undefined || !isP2wpkhAddress(firstAddress))) {
+    throw new Error("The first address must be a bc1q (P2WPKH) address supplied with the cipher groups.");
   }
   const { document, font } = await documentAndFont();
   const { errors, layouts } = validateAndLayout(keepers, font);
@@ -467,6 +492,7 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary, thresho
         drawCrc(page, font, ciphertextCrcs[index], offset);
       }
     });
+    if (firstAddress !== undefined) drawFirstWallet(page, font, firstAddress);
     page.pushOperators(popGraphicsState());
     const label = copyLabel(pages.indexOf(page) + 1);
     page.drawText(label, {

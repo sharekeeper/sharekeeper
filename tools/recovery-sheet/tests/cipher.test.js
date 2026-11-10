@@ -5,7 +5,7 @@ import { PDFDocument, PDFName, decodePDFRawStream } from "pdf-lib";
 import { ciphertextCrc64, decryptCiphertext, encryptPrefixes, firstCipherGroups } from "../src/cipher.js";
 import { generateMasterSecret, MASTER_SECRET_BYTES, thresholdSubsets } from "../src/master-secret.js";
 import { createKeeperCiphertextPdf } from "../src/keeper-pdf.js";
-import { createRecoveryPdf, CRC_CELL, CRC_DIGIT_SIZE, PREFIX_CELL, PREFIX_LETTER_SIZE } from "../src/pdf.js";
+import { createRecoveryPdf, CRC_CELL, CRC_DIGIT_SIZE, PREFIX_CELL, PREFIX_LETTER_SIZE, WALLET_ROW1 } from "../src/pdf.js";
 import { blankKeeper } from "../shared/schema.js";
 import { crc64Hex } from "../site/crc64.js";
 
@@ -187,4 +187,32 @@ test("hand-out is one PDF with one page per keeper, each page holding only that 
   await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, ciphertexts: ["a".repeat(80), ...texts.slice(1)] }));
   await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, keepers: [{ name: " " }, ...people.slice(1)] }));
   await assert.rejects(() => createKeeperCiphertextPdf({ keepers: people.slice(0, 2), ciphertexts: texts.slice(0, 2), threshold: 1 }));
+});
+
+test("wallet line 01 gets the first bc1q address and a ticked Empty box on every copy", async () => {
+  const address = "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu";
+  const pads = ["B".repeat(80), "C".repeat(80), "D".repeat(80)];
+  const G = ["ABCDEFGH", "ABCDEFGH", "ABCDEFGH"]; const C = ["0000000000000000", "0000000000000000", "0000000000000000"];
+  const base = { keepers: keepers(3), pads, threshold: 2, cipherGroups: G, ciphertextCrcs: C };
+  const document = await PDFDocument.load(await createRecoveryPdf({ ...base, firstAddress: address }));
+  assert.equal(document.getPageCount(), 4);
+  for (const page of document.getPages()) {
+    const overlay = streamsOf(document, page).at(-1);
+    const found = runs(document, page, overlay).filter((r) => r.value === address);
+    assert.equal(found.length, 1);
+    const [run] = found;
+    assert.ok(run.x === WALLET_ROW1.address.x && run.y > 257.98 && run.y < 285.78, "inside line 01 of the address column");
+    assert.ok(run.size >= WALLET_ROW1.address.minSize && run.size <= WALLET_ROW1.address.maxSize);
+    // Two strokes crossing the 7 x 7 Empty box at (286, 269.28).
+    const strokes = [...overlay.matchAll(/^([\d.]+) ([\d.]+) m\n([\d.]+) ([\d.]+) l\nS$/gm)].map((m) => m.slice(1).map(Number))
+      .filter(([x1, y1, x2, y2]) => [x1, x2].every((x) => x > 286 && x < 293) && [y1, y2].every((y) => y > 269.28 && y < 276.28));
+    assert.equal(strokes.length, 2);
+  }
+  // Without an address the wallet table stays blank, as before.
+  const plain = await PDFDocument.load(await createRecoveryPdf(base));
+  const plainOverlay = streamsOf(plain, plain.getPages()[0]).at(-1);
+  assert.ok(!runs(plain, plain.getPages()[0], plainOverlay).some((r) => r.value.startsWith("bc1")));
+  await assert.rejects(() => createRecoveryPdf({ ...base, firstAddress: "1BoatSLRHtKNngkdXEeobR76b53LETtpyT" }));
+  await assert.rejects(() => createRecoveryPdf({ ...base, firstAddress: address.slice(0, -1) + "v" }));
+  await assert.rejects(() => createRecoveryPdf({ keepers: keepers(3), pads, threshold: 2, firstAddress: address }));
 });

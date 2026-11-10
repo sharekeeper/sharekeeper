@@ -13,6 +13,7 @@ import { contactErrors } from "./contacts.js";
 import { ciphertextCrc64, decryptCiphertext, encryptPrefixes, firstCipherGroups } from "./cipher.js";
 import { createKeeperCiphertextPdf } from "./keeper-pdf.js";
 import { generateMasterSecret, thresholdSubsets } from "./master-secret.js";
+import { firstBip84Address, FIRST_ADDRESS_PATH, isP2wpkhAddress } from "./btc-address.js";
 import { combineMnemonics, decodeMnemonic, splitMasterSecret, wordPrefixes } from "./slip39.js";
 import logo from "../assets/logo-with-domain.webp";
 import "./style.css";
@@ -62,6 +63,7 @@ function App() {
   const [offline, setOffline] = useState(offlineState);
   const [shares, setShares] = useState([]);
   const [ciphertexts, setCiphertexts] = useState([]);
+  const [btcAddress, setBtcAddress] = useState("");
   const [keeperPdfUrl, setKeeperPdfUrl] = useState("");
   const [shownShare, setShownShare] = useState(-1);
   const [checkSummary, setCheckSummary] = useState("");
@@ -178,7 +180,7 @@ function App() {
     generationBusy.current = false;
     setBusy(false);
     setPads([]); setPdfUrl(""); setReveal(false);
-    setShares([]); setCiphertexts([]); setKeeperPdfUrl(""); setShownShare(-1); setCheckSummary("");
+    setShares([]); setCiphertexts([]); setBtcAddress(""); setKeeperPdfUrl(""); setShownShare(-1); setCheckSummary("");
     dryRunRef.current = false; setDryRun(false); setDryRunConsent(false);
     setKeepers(Array.from({ length: 5 }, (_, i) => blankKeeper(i + 1)));
     setCount(5); setThreshold(3); setKeeperIndex(0); setAcknowledgments([false, false]);
@@ -227,11 +229,16 @@ function App() {
         });
         stillOffline();
         const subsets = thresholdSubsets(count, threshold);
+        // First receive address (BIP-84, empty passphrase): the master secret is the BIP-32 seed.
+        const address = firstBip84Address(masterSecret);
+        if (!isP2wpkhAddress(address)) throw new Error("Address check failed. Nothing was issued.");
         for (const subset of subsets) {
           const recovered = await combineMnemonics(subset.map((i) => mnemonics[i]), "", globalThis.crypto);
           const same = recovered.length === masterSecret.length && recovered.every((b, i) => b === masterSecret[i]);
+          const sameAddress = same && subset === subsets[0] ? firstBip84Address(recovered) === address : true;
           recovered.fill(0);
           if (!same) throw new Error("Recovery check failed: a set of shares did not recover the seed. Nothing was issued.");
+          if (!sameAddress) throw new Error("Address check failed: recovered shares gave a different address. Nothing was issued.");
         }
         let refused = false;
         try { (await combineMnemonics(mnemonics.slice(0, threshold - 1), "", globalThis.crypto)).fill(0); } catch { refused = true; }
@@ -242,18 +249,19 @@ function App() {
         stillOffline();
         // A dry run never builds or offers any file.
         const keeperBytes = isDryRun ? null : await createKeeperCiphertextPdf({ keepers: activeKeepers, ciphertexts: texts, threshold });
-        shamir = { mnemonics, texts, keeperBytes, subsetCount: subsets.length };
+        shamir = { mnemonics, texts, keeperBytes, subsetCount: subsets.length, address };
       }
       const bytes = isDryRun ? null : await createRecoveryPdf({
         keepers: activeKeepers, pads: newPads, threshold,
         entropySummary: { sampleCount: movement.current.count, inputKind },
         cipherGroups: shamir.texts.map(firstCipherGroups), ciphertextCrcs: shamir.texts.map(ciphertextCrc64),
+        firstAddress: shamir.address,
       });
       if (version !== generationVersion.current) return;
       stillOffline();
       const url = bytes ? URL.createObjectURL(new Blob([bytes], { type: "application/pdf" })) : "";
       {
-        setShares(shamir.mnemonics); setCiphertexts(shamir.texts); setShownShare(-1);
+        setShares(shamir.mnemonics); setCiphertexts(shamir.texts); setBtcAddress(shamir.address); setShownShare(-1);
         setKeeperPdfUrl(shamir.keeperBytes ? URL.createObjectURL(new Blob([shamir.keeperBytes], { type: "application/pdf" })) : "");
         setCheckSummary(`Recovery check passed in memory: ${shamir.subsetCount === 1 ? `the only set of ${threshold} shares` : `each of the ${shamir.subsetCount} possible sets of ${threshold} shares`} recovered the seed, and ${threshold - 1} share${threshold - 1 === 1 ? " was" : "s were"} refused. Every ciphertext decrypted back to its share.`);
       }
@@ -405,6 +413,7 @@ function App() {
             <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Sharekeeper hand-out pages</h3><p>One PDF · one page per sharekeeper · their 20 groups of 4 letters and CRC64</p><span>Print it and give each sharekeeper only their own page. Don’t send the file itself to anyone: it holds every sharekeeper’s ciphertext.</span></div></div>
             <div className="actions"><a className="secondary-button" href={keeperPdfUrl} download="sharekeeper-ciphertext-handout.pdf" data-testid="download-ciphertexts"><Download size={18} aria-hidden="true" /> Download hand-out pages</a></div></>}
             <div className="contact-review">{activeKeepers.map((k, i) => <article key={k.id} className="review-row"><span className="row-number">{String(i + 1).padStart(2, "0")}</span><div><h3>{k.name}</h3><p data-testid={`cipher-summary-${i + 1}`}>First groups {ciphertexts[i]?.slice(0, 4)} {ciphertexts[i]?.slice(4, 8)} · CRC64 {ciphertexts[i] ? ciphertextCrc64(ciphertexts[i]) : ""}</p></div></article>)}</div>
+            <div className="address-panel"><h3>First Bitcoin address</h3><p className="address-value" data-testid="btc-address">{btcAddress}</p><p className="technical-note">Native SegWit (bc1q), BIP-84 path {FIRST_ADDRESS_PATH}, derived from the seed with an empty passphrase. {dryRun ? "Practice seed: never send funds to it." : "It is on line 01 of the wallet table, with Empty ticked. After restoring the shares in your wallet with no passphrase, check that its first receive address matches before sending funds."} It is public, but it links this wallet to you, so share it only as needed.</p></div>
             <div className="secret-section"><h3>Plaintext shares</h3>
               <p className="technical-note">{dryRun ? "Practice shares: never use them for real funds. " : ""}These are the {count} SLIP-39 shares; any {threshold} restore the seed in a wallet that supports SLIP-39 recovery. They exist only on this screen{dryRun ? "" : " and are not in either PDF"}. Show one at a time, only where no camera or person can see the screen.</p>
               <div className="share-buttons">{shares.map((_, i) => <button key={i} type="button" className="text-button" disabled={offlineBlocked} aria-expanded={shownShare === i} onClick={() => setShownShare(shownShare === i ? -1 : i)} data-testid={`toggle-share-${i + 1}`}>{shownShare === i ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}{shownShare === i ? `Hide share ${String(i + 1).padStart(2, "0")}` : `Show share ${String(i + 1).padStart(2, "0")}`}</button>)}</div>
