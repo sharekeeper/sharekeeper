@@ -426,7 +426,7 @@ function App() {
         <p className="eyebrow">The document</p>
         <div className="paper-preview" aria-hidden="true">
           <div className="paper-title">SHAREKEEPER</div><div className="paper-subtitle">RECOVERY SHEET · {threshold} OF {count} · 3 COPIES</div><div className="paper-instructions" />
-          {Array.from({ length: 5 }, (_, i) => <div className={`paper-share ${i >= count ? "unused" : ""}`} key={i}><div className="paper-share-header"><strong>SHARE {String(i + 1).padStart(2, "0")}</strong><span>{i >= count ? "LEFT BLANK" : ""}</span></div><div className="paper-share-content"><div className="paper-contact">{i < count && keepers[i].name ? keepers[i].name : <><i /><i /><i /></>}</div><div className="paper-grid">{Array.from({ length: 20 }, (_, j) => <i key={j} />)}</div></div><div className="paper-hash" /></div>)}
+          {Array.from({ length: 5 }, (_, i) => i >= count ? <div className="paper-share unused" key={i} aria-hidden="true" /> : <div className="paper-share" key={i}><div className="paper-share-header"><strong>SHARE {String(i + 1).padStart(2, "0")}</strong><span /></div><div className="paper-share-content"><div className="paper-contact">{keepers[i].name ? keepers[i].name : <><i /><i /><i /></>}</div><div className="paper-grid">{Array.from({ length: 20 }, (_, j) => <i key={j} />)}</div></div><div className="paper-hash" /></div>)}
           <div className="paper-wallets"><span>ACCOUNTS / WALLET PASSPHRASES</span>{Array.from({ length: 7 }, (_, i) => <i key={i} />)}</div>
         </div>
         <p className="preview-caption">Layout preview · no secret keys shown</p>

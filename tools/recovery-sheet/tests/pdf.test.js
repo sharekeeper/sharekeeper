@@ -105,6 +105,39 @@ async function sourceStream() {
   return streams[0];
 }
 
+// Independent model of the export: header digits change, and the drawing of
+// every unused share section (from its rounded outline to the next section)
+// is removed, so the area is blank. Used sections and everything else are verbatim.
+const SECTION_START = (y) => `.8 w\n.72549 .784314 .827451 RG\n1 1 1 rg\nn\n34 ${y} m\n`;
+const SECTION_YS = ["1178.78", "978.78", "778.78", "578.78", "378.78", "90.78"];
+function expectedSheet(original, count, threshold) {
+  const text = original.replace("(3 OF 5  |", `(${threshold} OF ${count}  |`);
+  if (count === 5) return text;
+  return text.slice(0, text.indexOf(SECTION_START(SECTION_YS[count]))) + text.slice(text.indexOf(SECTION_START(SECTION_YS[5])));
+}
+
+test("unused share sections are removed whole and used sections stay verbatim", async () => {
+  const original = await sourceStream();
+  SECTION_YS.forEach((y) => assert.equal(original.split(SECTION_START(y)).length - 1, 1, `section at ${y}`));
+  const blocks = SECTION_YS.slice(0, 5).map((y, i) => original.slice(original.indexOf(SECTION_START(y)), original.indexOf(SECTION_START(SECTION_YS[i + 1]))));
+  blocks.forEach((block, i) => {
+    assert.equal(block.split(`(SHARE 0${i + 1})`).length - 1, 1);
+    assert.equal((block.match(/ 16 26 re S$/gm) ?? []).length, 80);
+  });
+  for (const count of [3, 4, 5]) {
+    const document = await PDFDocument.load(await createRecoveryPdf({ ...fixture(count), threshold: 2 }));
+    for (const page of document.getPages()) {
+      const [stream] = sheetStreams(document, page.node.Resources());
+      for (let slot = 0; slot < 5; slot += 1) {
+        assert.equal(stream.includes(`(SHARE 0${slot + 1})`), slot < count, `SHARE 0${slot + 1} with ${count} keepers`);
+        assert.equal(stream.includes(blocks[slot]), slot < count);
+      }
+      assert.equal((stream.match(/ 16 26 re S$/gm) ?? []).length, count * 80);
+      assert.ok(stream.includes("ACCOUNTS / WALLET PASSPHRASES"));
+    }
+  }
+});
+
 test("bundled template is the supplied sample PDF byte for byte", async () => {
   const source = await readFile(SOURCE_URL);
   assert.equal(SOURCE_TEMPLATE_SHA256, "8bc121acfea77e62f98d797141e3fe1108f9fe4b20218c72b6a611699bf9961d");
@@ -182,7 +215,7 @@ test("3/4/5 exports reproduce the template page unchanged and only fill contacts
     const templateStreams = sheetStreams(document, page.node.Resources());
     assert.equal(templateStreams.length, 1);
     assert.equal(streams.some((stream) => stream.includes("SHAREKEEPER SLIP-39 RECOVERY SHEET")), false);
-    assert.equal(templateStreams[0], original.replace("(3 OF 5  |", `(${thresholdFor(count)} OF ${count}  |`));
+    assert.equal(templateStreams[0], expectedSheet(original, count, thresholdFor(count)));
     const overlay = streams.at(-1);
     // Overlay values are drawn in the sheet's own coordinates through the
     // template's form matrix, so each value lands in its scaled box.
@@ -266,7 +299,7 @@ test("every n-of-m choice changes only the header digits and title", async () =>
       const document = await PDFDocument.load(await createRecoveryPdf({ ...fixture(count), threshold }));
       assert.equal(document.getTitle(), `Sharekeeper SLIP-39 recovery sheet: ${threshold} of ${count}`);
       const [stream] = sheetStreams(document, document.getPages()[0].node.Resources());
-      assert.equal(stream, original.replace("(3 OF 5  |", `(${threshold} OF ${count}  |`));
+      assert.equal(stream, expectedSheet(original, count, threshold));
     }
   }
   for (const threshold of [0, 1, 5, 6, 2.5, "3"]) {

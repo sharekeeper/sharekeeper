@@ -16,6 +16,33 @@ import { isValidThreshold, KEEPER_COUNTS, PAD_LENGTH, thresholdFor, thresholdOpt
 const INK = rgb(0.094118, 0.184314, 0.247059);
 const KEEPER_STRIDE = 200;
 const HEADER_LITERAL = "(3 OF 5  |";
+/**
+ * Each share section in the template drawing is one self-contained block that
+ * begins by setting its own line width and colours and drawing its rounded
+ * outline from (34, y). The wallet-passphrase section begins the same way at
+ * y = 90.78. Blocks for unused sharekeepers are removed, leaving that area of
+ * the page blank; nothing else in the drawing changes.
+ */
+const SECTION_TOP_Y = 1178.78;
+const WALLET_SECTION_Y = 90.78;
+export function sectionMarker(y) {
+  return `.8 w\n.72549 .784314 .827451 RG\n1 1 1 rg\nn\n34 ${Number(y.toFixed(2))} m\n`;
+}
+export function sheetTextFor(text, count, threshold) {
+  if (text.split(HEADER_LITERAL).length - 1 !== 1) throw new Error("Template header changed; review before export.");
+  let updated = text.replace(HEADER_LITERAL, `(${threshold} OF ${count}  |`);
+  if (count < 5) {
+    const markers = [0, 1, 2, 3, 4].map((slot) => sectionMarker(SECTION_TOP_Y - slot * KEEPER_STRIDE)).concat(sectionMarker(WALLET_SECTION_Y));
+    for (const marker of markers) {
+      if (updated.split(marker).length - 1 !== 1) throw new Error("Template share sections changed; review before export.");
+    }
+    const start = updated.indexOf(markers[count]);
+    const end = updated.indexOf(markers[5]);
+    if (!(start > 0 && end > start)) throw new Error("Template share sections out of order; review before export.");
+    updated = updated.slice(0, start) + updated.slice(end);
+  }
+  return updated;
+}
 
 /**
  * The template's seven contact rows, measured from the source content stream:
@@ -251,15 +278,15 @@ export function locateTemplateSheet(template) {
 }
 
 /**
- * Load the untouched template. For any sheet other than 3 of 5 only the
- * threshold and share-count digits in the header literal change, in the template's own font.
+ * Load the untouched template. For any sheet other than 3 of 5 the threshold
+ * and share-count digits in the header literal change, in the template's own
+ * font, and the drawing of each unused share section is removed (left blank).
  */
 async function templatePage(count, threshold) {
   const template = await PDFDocument.load(decodeBase64(TEMPLATE_BASE64), { updateMetadata: false });
   const sheet = locateTemplateSheet(template);
   if (count !== 5 || threshold !== 3) {
-    if (sheet.text.split(HEADER_LITERAL).length - 1 !== 1) throw new Error("Template header changed; review before export.");
-    const updated = sheet.text.replace(HEADER_LITERAL, `(${threshold} OF ${count}  |`);
+    const updated = sheetTextFor(sheet.text, count, threshold);
     const fresh = template.context.flateStream(Uint8Array.from(updated, (character) => character.charCodeAt(0)));
     for (const [key, value] of sheet.stream.dict.entries()) {
       if (!["/Filter", "/Length", "/DecodeParms"].includes(key.toString())) fresh.dict.set(key, value);
