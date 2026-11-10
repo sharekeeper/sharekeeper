@@ -17,6 +17,7 @@ import { firstBip84Address, FIRST_ADDRESS_PATH, isP2wpkhAddress } from "./btc-ad
 import { checkSubsets } from "./recovery-check.js";
 import { formatCrc64 } from "../site/crc64.js";
 import { ModeSwitch, RecoverApp } from "./recover.jsx";
+import { modeFromHash, resolveHashChange } from "./mode.js";
 import { combineMnemonics, decodeMnemonic, splitMasterSecret, wordPrefixes } from "./slip39.js";
 import logo from "../assets/logo-with-domain.webp";
 import "./style.css";
@@ -44,7 +45,7 @@ const FIELD_LABELS = {
   address1: "Street Address", address2: "Street Address 2", region: "State/Country Postal Code",
 };
 
-function App() {
+function App({ onLockChange }) {
   const [stage, setStage] = useState(0);
   const [count, setCount] = useState(5);
   const [threshold, setThreshold] = useState(3);
@@ -90,6 +91,10 @@ function App() {
 
   useEffect(() => { headingRef.current?.focus(); }, [stage, keeperIndex]);
   useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
+  // Tell Root whether a session is active, so a hash change cannot unmount it.
+  useEffect(() => { onLockChange?.(stage > 0 || busy); }, [stage, busy, onLockChange]);
+  // On unmount, invalidate any generation still running so it issues nothing.
+  useEffect(() => () => { generationVersion.current += 1; }, []);
   useEffect(() => () => { if (keeperPdfUrl) URL.revokeObjectURL(keeperPdfUrl); }, [keeperPdfUrl]);
   useEffect(() => {
     const update = () => {
@@ -449,18 +454,28 @@ function App() {
   </>;
 }
 
-function modeFromHash() {
-  return globalThis.location?.hash === "#recover" ? "recover" : "create";
-}
-
 function Root() {
-  const [mode, setMode] = useState(modeFromHash);
+  const [mode, setMode] = useState(() => modeFromHash(globalThis.location?.hash));
+  const modeRef = useRef(mode);
+  const lockedRef = useRef(false);
+  const lastHash = useRef(globalThis.location?.hash ?? "");
+  modeRef.current = mode;
   useEffect(() => {
-    const onHash = () => setMode(modeFromHash());
+    const onHash = () => {
+      const hash = globalThis.location?.hash ?? "";
+      const { mode: next, revert } = resolveHashChange({ hash, current: modeRef.current, locked: lockedRef.current });
+      if (revert) {
+        globalThis.history?.replaceState?.(null, "", lastHash.current || `${globalThis.location.pathname}${globalThis.location.search}`);
+        return;
+      }
+      lastHash.current = hash;
+      setMode(next);
+    };
     globalThis.addEventListener?.("hashchange", onHash);
     return () => globalThis.removeEventListener?.("hashchange", onHash);
   }, []);
-  return mode === "recover" ? <RecoverApp /> : <App />;
+  useEffect(() => { if (mode !== "create") lockedRef.current = false; }, [mode]);
+  return mode === "recover" ? <RecoverApp /> : <App onLockChange={(locked) => { lockedRef.current = locked; }} />;
 }
 
 createRoot(document.getElementById("root")).render(<Root />);

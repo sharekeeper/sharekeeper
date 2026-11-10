@@ -101,7 +101,7 @@ export function RecoverApp() {
   function update(index, name, value) {
     if (practice || !offline.ready) return;
     version.current += 1;
-    setRecovery(null); setFailure("");
+    setBusy(false); setRecovery(null); setFailure("");
     setSlots((current) => current.map((slot, i) => (i === index ? { ...slot, [name]: value } : slot)));
   }
 
@@ -213,8 +213,8 @@ export function RecoverApp() {
         <h2 id="recover-combine-heading">Confirm the wallet</h2>
         <p className="technical-note">{readySet ? `You have ${readySet.members.length} valid share${readySet.members.length === 1 ? "" : "s"} of a set that needs ${readySet.threshold}. ` : sets.length ? `Valid shares so far: ${sets.map((s) => `${s.members.length} of ${s.threshold} needed`).join("; ")}. ` : "Enter at least the number of shares your sheet says are needed. "}{sets.length > 1 ? "Some shares belong to a different set; only shares of one set can be combined. " : ""}{sets.some((s) => s.duplicates.length) ? "The same share was entered twice; it counts once. " : ""}Combining happens only in this tab; the seed itself is never shown.</p>
         <div className="recover-pair">
-          <div className="field recover-field"><label htmlFor="recover-passphrase">Passphrase<span>leave empty if "Empty" is ticked on your sheet</span></label><input id="recover-passphrase" type="password" value={passphrase} disabled={!canEnter} readOnly={practice} onChange={(e) => { if (!practice) { setPassphrase(e.target.value); setRecovery(null); } }} autoComplete="off" spellCheck="false" data-testid="recover-passphrase" /></div>
-          <div className="field recover-field"><label htmlFor="recover-address">First known address on your sheet<span>optional · line 01, bc1q…</span></label><input id="recover-address" value={expectedAddress} disabled={!canEnter} readOnly={practice} onChange={(e) => { if (!practice) { setExpectedAddress(e.target.value.trim()); setRecovery(null); } }} autoComplete="off" spellCheck="false" data-testid="recover-expected-address" /></div>
+          <div className="field recover-field"><label htmlFor="recover-passphrase">Passphrase<span>leave empty if "Empty" is ticked on your sheet</span></label><input id="recover-passphrase" type="password" value={passphrase} disabled={!canEnter} readOnly={practice} onChange={(e) => { if (!practice) { version.current += 1; setBusy(false); setPassphrase(e.target.value); setRecovery(null); } }} autoComplete="off" spellCheck="false" data-testid="recover-passphrase" /></div>
+          <div className="field recover-field"><label htmlFor="recover-address">First known address on your sheet<span>optional · line 01, bc1q…</span></label><input id="recover-address" value={expectedAddress} disabled={!canEnter} readOnly={practice} onChange={(e) => { if (!practice) { version.current += 1; setBusy(false); setExpectedAddress(e.target.value.trim()); setRecovery(null); } }} autoComplete="off" spellCheck="false" data-testid="recover-expected-address" /></div>
         </div>
         <div className="actions"><button type="button" className="primary-button" disabled={!readySet || busy || !canEnter} onClick={checkRecovery} data-testid="recover-check">{busy ? "Checking locally…" : "Combine and check the first address"}</button></div>
         {recovery && <div className="address-panel" data-testid="recover-result"><h3>{recovery.expectedStatus === "match" ? "Recovered: the first address matches your sheet." : recovery.expectedStatus === "mismatch" ? "These shares and passphrase give a different wallet than your sheet." : "Shares combined."}</h3>
