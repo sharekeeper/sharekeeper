@@ -121,7 +121,7 @@ test("recovery sheet fills first 2 cipher groups and CRC64 in their template box
     const crcs = texts.map(ciphertextCrc64);
     const bytes = await createRecoveryPdf({ keepers: keepers(count), pads, threshold: 2, cipherGroups: groups, ciphertextCrcs: crcs });
     const document = await PDFDocument.load(bytes);
-    assert.equal(document.getPageCount(), 3);
+    assert.equal(document.getPageCount(), 4);
     for (const page of document.getPages()) {
     const overlay = streamsOf(document, page).at(-1);
     const all = runs(document, page, overlay);

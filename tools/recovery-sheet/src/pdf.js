@@ -111,9 +111,9 @@ export const PDF_CONTACT_FRAME = Object.freeze({
 export const PAD_CELL = Object.freeze({ x: 371, y: 1294.78, width: 16, height: 26, groupPitch: 78.8551, rowPitch: 46 });
 export const PAD_LETTER_SIZE = 15;
 /** The unified recovery-sheet PDF holds this many copies of the filled sheet, one per page. */
-export const SHEET_COPIES = 3;
+export const SHEET_COPIES = 4;
 /**
- * Each copy is labeled "COPY n OF 3" in the page's blank left margin, outside
+ * Each copy is labeled "COPY n OF 4" in the page's blank left margin, outside
  * the template drawing (whose ink starts at x ≈ 32 pt on the US Letter page),
  * running bottom-to-top and centred vertically. The sheet itself is untouched.
  */

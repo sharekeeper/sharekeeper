@@ -200,10 +200,10 @@ test("3/4/5 exports reproduce the template page unchanged and only fill contacts
     assert.ok(bytes instanceof Uint8Array);
     const document = await PDFDocument.load(bytes);
     assert.equal(document.getPageCount(), SHEET_COPIES);
-    assert.equal(SHEET_COPIES, 3);
+    assert.equal(SHEET_COPIES, 4);
     const [page, ...copies] = document.getPages();
     // Every copy is the same unchanged template page with the same filled values,
-    // in the same places, plus only its own "COPY n OF 3" label in the blank left margin.
+    // in the same places, plus only its own "COPY n OF 4" label in the blank left margin.
     const sheetRuns = (p) => overlayTextRuns(document, p, contentStreams(document, p).at(-1)).filter((r) => !r.rotated);
     const firstRuns = sheetRuns(page);
     document.getPages().forEach((p, index) => {
@@ -211,7 +211,7 @@ test("3/4/5 exports reproduce the template page unchanged and only fill contacts
       assert.equal(labels.length, 1);
       const [label] = labels;
       assert.equal(label.value, copyLabel(index + 1));
-      assert.equal(label.value, `COPY ${index + 1} OF 3`);
+      assert.equal(label.value, `COPY ${index + 1} OF 4`);
       // Rotated 90°: glyphs extend left of the baseline by at most the ascent, and upward by the text width.
       const bounds = measurePdfGlyphBounds(label.value, label.size);
       assert.ok(label.x + 0.5 < COPY_LABEL.inkMinX, "label baseline left of the sheet's ink");
