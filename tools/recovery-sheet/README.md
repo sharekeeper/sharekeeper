@@ -42,6 +42,14 @@ The UI explicitly names two inputs: the browser's cryptographic random-number ge
 
 This is computational key derivation. It does not establish information-theoretic one-time-pad security, 80 independently measured random-letter entropy, or a security-strength estimate for human gestures. Predictable movements do not replace, repair, or justify bypassing the required browser cryptographic source.
 
+## Provider information pack
+
+The generator's second PDF is a provider information pack: two US Letter pages per provider, in order, so double-sided printing gives each provider one sheet. Page 1 holds only that provider's 80 ciphertext letters in 20 numbered groups and the ciphertext CRC64 (grouped in fours), with how to check it on receipt. Page 2 explains how to handle a release request using only the sheet's own steps (groups 01–02 first so the requester can confirm the provider, then the agreed identity checks and notice period, then all 20 groups), and has a record of agreed terms and a release log to fill in by hand. No page holds a pad, plaintext share, seed, the wallet address, or another provider's name or ciphertext.
+
+## Validate and decrypt mode
+
+The same app file has a second mode, opened from the mode switch or `recovery.html#recover`. For each sharekeeper the owner enters the ciphertext they read out and the matching pad (K) from the recovery sheet, plus, optionally, the first two cipher groups and expected CRC64 from the sheet. The tool reports the CRC64 and group matches, decrypts P = (C − K) mod 26, maps the 20 prefixes back to SLIP-39 words, and verifies the share checksum, pointing to the group that fails to decrypt to a word. Once enough valid shares of one set are entered, it combines them in memory with the passphrase (empty by default) only to derive the first BIP-84 address and compare it with line 01 of the sheet; the recovered secret is zeroed at once and never shown. Real entry is enabled only when the file is opened locally with the network disconnected, and everything typed is discarded if a connection appears. Online, the mode offers a read-only practice example generated in the tab, including a demonstration of a copying mistake. The share words can be revealed one at a time for entry into a wallet that supports SLIP-39 recovery.
+
 ## Recovery-tool privacy boundary
 
 The recovery tool has no backend, account, analytics, service worker, cookie, local storage, session storage, or IndexedDB. Contacts, input records, and generated material remain in application memory until explicitly exported as a private PDF.

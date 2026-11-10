@@ -16,13 +16,14 @@ import { generateMasterSecret, thresholdSubsets } from "./master-secret.js";
 import { firstBip84Address, FIRST_ADDRESS_PATH, isP2wpkhAddress } from "./btc-address.js";
 import { checkSubsets } from "./recovery-check.js";
 import { formatCrc64 } from "../site/crc64.js";
+import { ModeSwitch, RecoverApp } from "./recover.jsx";
 import { combineMnemonics, decodeMnemonic, splitMasterSecret, wordPrefixes } from "./slip39.js";
 import logo from "../assets/logo-with-domain.webp";
 import "./style.css";
 
 /**
  * The single Sharekeeper workflow: seed → SLIP-39 shares → pads → recovery
- * sheet (4 labeled copies) and sharekeeper hand-out. Real generation runs only
+ * sheet (4 labeled copies) and provider information packs. Real generation runs only
  * from a local file with no network. An explicitly opted-in dry run works
  * online but never creates or offers any download.
  */
@@ -303,13 +304,13 @@ function App() {
     </header>
     <nav className="tool-site-nav" aria-label="Sharekeeper website">
       <a href={`${SITE_URL}#/tools`} target="_blank" rel="noopener noreferrer" data-testid="link-site-tools"><ArrowLeft size={14} aria-hidden="true" /> Sharekeeper tools</a>
-      <span aria-current="page">Seed, shares and recovery sheet</span>
+      <ModeSwitch mode="create" locked={stage > 0 || busy} />
       <a href={`${SITE_URL}#/providers`} target="_blank" rel="noopener noreferrer" data-testid="link-provider-directory">Provider directory <ArrowRight size={14} aria-hidden="true" /></a>
     </nav>
     <div className="workspace">
       <aside className="workflow" aria-label="Your progress">
         <p className="eyebrow">Recovery tools</p>
-        <h1>Seed to<br className="desktop-break" /> hand-outs</h1><p className="intro">A new wallet seed, SLIP-39 shares,<br />your recovery sheet and hand-outs.</p>
+        <h1>Seed to<br className="desktop-break" /> provider packs</h1><p className="intro">A new wallet seed, SLIP-39 shares,<br />your recovery sheet and provider packs.</p>
         <ol className="steps">
           {STEPS.map((label, i) => <li key={label} className={Math.min(stage, 3) === i ? "active" : stage > i ? "complete" : ""} aria-current={Math.min(stage, 3) === i ? "step" : undefined}>
             <span className="step-number">{stage > i ? <Check size={15} aria-hidden="true" /> : String(i + 1).padStart(2, "0")}</span><span>{label}</span>
@@ -393,7 +394,7 @@ function App() {
             <p className="subheading">Each sharekeeper gets one SLIP-39 share, encrypted with its own {PAD_LENGTH}-letter pad. Nothing has been generated yet.</p>
             <div className="contact-review">{activeKeepers.map((k, i) => <article key={k.id} className="review-row"><span className="row-number">{String(i + 1).padStart(2, "0")}</span><div><h3>{k.name || "Contact details missing"}</h3><p>{k.phone || k.website || k.address1 || "Add a contact channel"}</p></div><button className="text-button" disabled={busy} onClick={() => { setKeeperIndex(i); go(1); }} data-testid={`edit-keeper-${i + 1}`}>Edit</button></article>)}</div>
             <div className="mix-summary"><Fingerprint size={20} aria-hidden="true" /><div><strong>Two sources, one local generation</strong><p>{BROWSER_SEED_BITS}-bit browser seed per pad ⊕ {BROWSER_SEED_BITS}-bit block from your {movement.current.count} movement/timing samples (estimated score {Math.min(userBits, 99999)}) → unbiased A–Z selection.</p></div></div>
-            {<p className="technical-note">Generation creates a 128-bit master secret (browser CSPRNG ⊕ SHA-512 of your input), splits it into {count} SLIP-39 shares with threshold {threshold} (single-level: one group; extendable, iteration exponent 1, no SLIP-39 passphrase), and checks in memory that every set of {threshold} shares recovers it. Each share’s 80-letter plaintext P is the first 4 letters of its 20 words; ciphertext C = (P + K) mod 26 with A = 0. {dryRun ? "In a dry run no PDF is created: you see the results on screen only." : "You get two PDFs: your one unified recovery sheet for all sharekeepers, as 4 labeled copies on 4 pages (COPY 1 OF 4 to COPY 4 OF 4) with contacts, pads, first 2 cipher groups and ciphertext CRC64 filled in, and a hand-out file with one ciphertext page per sharekeeper. Wallet passphrases stay blank."}</p>}
+            {<p className="technical-note">Generation creates a 128-bit master secret (browser CSPRNG ⊕ SHA-512 of your input), splits it into {count} SLIP-39 shares with threshold {threshold} (single-level: one group; extendable, iteration exponent 1, no SLIP-39 passphrase), and checks in memory that every set of {threshold} shares recovers it. Each share’s 80-letter plaintext P is the first 4 letters of its 20 words; ciphertext C = (P + K) mod 26 with A = 0. {dryRun ? "In a dry run no PDF is created: you see the results on screen only." : "You get two PDFs: your one unified recovery sheet for all sharekeepers, as 4 labeled copies on 4 pages (COPY 1 OF 4 to COPY 4 OF 4) with contacts, pads, first 2 cipher groups and ciphertext CRC64 filled in, and a provider information pack with two pages per provider (their ciphertext and CRC64, how to handle a release request, and a record of agreed terms). Wallet line 01 gets the first address; other wallet rows stay blank."}</p>}
             <div className="acknowledgments">{(dryRun ? [
               "I understand this is a practice run: nothing will be downloaded, and the results must never be used for real funds.",
               "I understand that for real use I must download the tool and run it offline.",
@@ -407,10 +408,10 @@ function App() {
             <p className="eyebrow">{dryRun ? "Dry run / Practice only" : "Ready / Private documents"}</p>
             <h2 id="step-heading" tabIndex="-1" ref={headingRef}>{dryRun ? `Dry run complete: a practice seed and ${count} shares.` : `Your seed and ${count} shares are ready.`}</h2>
             <p className="subheading" data-testid="check-summary">{checkSummary}</p>
-            {dryRun ? <div className="plain-note dry-note" data-testid="dry-run-no-downloads"><LockKeyhole size={20} aria-hidden="true" /><div><h3>No downloads in a dry run.</h3><p>A real run produces your recovery sheet (one PDF, 4 labeled copies) and the sharekeeper hand-out (one PDF, a page per sharekeeper). To get them, {offline.fromFile ? "disconnect from the network, reopen this file," : PLATFORM_PREVIEW ? <><a href={STANDALONE_URL} target="_blank" rel="noopener noreferrer">open the standalone tool</a>, download it, disconnect,</> : <><a href="./sharekeeper-offline.html" download="sharekeeper-offline.html" data-testid="dry-download">download the tool</a>, disconnect, open the file,</>} and run it again. Your contacts are not carried over.</p></div></div> : <><div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Your recovery sheet</h3><p>One unified sheet for all {count} sharekeepers, 4 labeled copies (COPY 1–4 OF 4, one per page) · {threshold} of {count} · contacts, pads, first 2 cipher groups, ciphertext CRC64 · US Letter</p><span>Contains the pads. Keep it private; never give it to a sharekeeper.</span></div></div>
+            {dryRun ? <div className="plain-note dry-note" data-testid="dry-run-no-downloads"><LockKeyhole size={20} aria-hidden="true" /><div><h3>No downloads in a dry run.</h3><p>A real run produces your recovery sheet (one PDF, 4 labeled copies) and the provider information pack (one PDF, two pages per provider). To get them, {offline.fromFile ? "disconnect from the network, reopen this file," : PLATFORM_PREVIEW ? <><a href={STANDALONE_URL} target="_blank" rel="noopener noreferrer">open the standalone tool</a>, download it, disconnect,</> : <><a href="./sharekeeper-offline.html" download="sharekeeper-offline.html" data-testid="dry-download">download the tool</a>, disconnect, open the file,</>} and run it again. Your contacts are not carried over.</p></div></div> : <><div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Your recovery sheet</h3><p>One unified sheet for all {count} sharekeepers, 4 labeled copies (COPY 1–4 OF 4, one per page) · {threshold} of {count} · contacts, pads, first 2 cipher groups, ciphertext CRC64 · US Letter</p><span>Contains the pads. Keep it private; never give it to a sharekeeper.</span></div></div>
             <div className="actions"><a className="primary-button" href={pdfUrl} download="sharekeeper-recovery-sheet-private.pdf" data-testid="download-pdf"><Download size={18} aria-hidden="true" /> Download recovery sheet</a></div>
-            <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Sharekeeper hand-out pages</h3><p>One PDF · one page per sharekeeper · their 20 groups of 4 letters and CRC64</p><span>Print it and give each sharekeeper only their own page. Don’t send the file itself to anyone: it holds every sharekeeper’s ciphertext.</span></div></div>
-            <div className="actions"><a className="secondary-button" href={keeperPdfUrl} download="sharekeeper-ciphertext-handout.pdf" data-testid="download-ciphertexts"><Download size={18} aria-hidden="true" /> Download hand-out pages</a></div></>}
+            <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Provider information pack</h3><p>One PDF · two pages per provider · their 20 groups of 4 letters and CRC64, release-request steps, and a record of agreed terms to fill in</p><span>Print it double-sided and give each provider only their own sheet (two pages). Don’t send the file itself to anyone: it holds every provider’s ciphertext.</span></div></div>
+            <div className="actions"><a className="secondary-button" href={keeperPdfUrl} download="sharekeeper-provider-packs.pdf" data-testid="download-ciphertexts"><Download size={18} aria-hidden="true" /> Download provider packs</a></div></>}
             <div className="contact-review">{activeKeepers.map((k, i) => <article key={k.id} className="review-row"><span className="row-number">{String(i + 1).padStart(2, "0")}</span><div><h3>{k.name}</h3><p data-testid={`cipher-summary-${i + 1}`}>First groups {ciphertexts[i]?.slice(0, 4)} {ciphertexts[i]?.slice(4, 8)} · CRC64 {ciphertexts[i] ? formatCrc64(ciphertextCrc64(ciphertexts[i])) : ""}</p></div></article>)}</div>
             <div className="address-panel"><h3>First Bitcoin address</h3><p className="address-value" data-testid="btc-address">{btcAddress}</p><p className="technical-note">Native SegWit (bc1q), BIP-84 path {FIRST_ADDRESS_PATH}, derived from the seed with an empty passphrase. {dryRun ? "Practice seed: never send funds to it." : "It is on line 01 of the wallet table, with Empty ticked. After restoring the shares in your wallet with no passphrase, check that its first receive address matches before sending funds."} It is public, but it links this wallet to you, so share it only as needed.</p></div>
             <div className="secret-section"><h3>Plaintext shares</h3>
@@ -438,7 +439,7 @@ function App() {
           <div className="paper-wallets"><span>ACCOUNTS / WALLET PASSPHRASES</span>{Array.from({ length: 7 }, (_, i) => <i key={i} />)}</div>
         </div>
         <p className="preview-caption">Layout preview · no secret keys shown</p>
-        <dl className="document-facts"><div><dt>Sharekeepers</dt><dd>{count} independent contacts</dd></div><div><dt>Recovery</dt><dd>Any {threshold} of {count}</dd></div><div><dt>Pad format</dt><dd>20 groups × 4 A–Z letters</dd></div><div><dt>Randomness</dt><dd>Browser RNG + your input</dd></div><div><dt>Output</dt><dd>{dryRun ? "None (dry run)" : "Recovery sheet (4 copies) + hand-out"}</dd></div></dl>
+        <dl className="document-facts"><div><dt>Sharekeepers</dt><dd>{count} independent contacts</dd></div><div><dt>Recovery</dt><dd>Any {threshold} of {count}</dd></div><div><dt>Pad format</dt><dd>20 groups × 4 A–Z letters</dd></div><div><dt>Randomness</dt><dd>Browser RNG + your input</dd></div><div><dt>Output</dt><dd>{dryRun ? "None (dry run)" : "Recovery sheet (4 copies) + provider packs"}</dd></div></dl>
       </aside>
     </div>
     <dialog ref={dialogRef} onCancel={(e) => { e.preventDefault(); setClearDialog(false); }} className="clear-dialog" aria-labelledby="clear-heading">
@@ -448,4 +449,18 @@ function App() {
   </>;
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+function modeFromHash() {
+  return globalThis.location?.hash === "#recover" ? "recover" : "create";
+}
+
+function Root() {
+  const [mode, setMode] = useState(modeFromHash);
+  useEffect(() => {
+    const onHash = () => setMode(modeFromHash());
+    globalThis.addEventListener?.("hashchange", onHash);
+    return () => globalThis.removeEventListener?.("hashchange", onHash);
+  }, []);
+  return mode === "recover" ? <RecoverApp /> : <App />;
+}
+
+createRoot(document.getElementById("root")).render(<Root />);

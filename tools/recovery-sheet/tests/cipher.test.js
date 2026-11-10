@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import { PDFDocument, PDFName, decodePDFRawStream } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
+import { FONT_BASE64 } from "../src/pdf-assets.js";
 import { ciphertextCrc64, decryptCiphertext, encryptPrefixes, firstCipherGroups } from "../src/cipher.js";
 import { generateMasterSecret, MASTER_SECRET_BYTES, thresholdSubsets } from "../src/master-secret.js";
 import { createKeeperCiphertextPdf } from "../src/keeper-pdf.js";
@@ -159,27 +161,96 @@ test("recovery sheet rejects malformed cipher groups or CRCs", async () => {
   await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: G, ciphertextCrcs: ["00000000", ...C.slice(1)] }));
 });
 
-test("hand-out is one PDF with one page per keeper, each page holding only that keeper's name, ciphertext and CRC", async () => {
+test("provider pack is one PDF with two consecutive Letter pages per provider, private to that provider", async () => {
+  const measuringDocument = await PDFDocument.create();
+  measuringDocument.registerFontkit(fontkit);
+  const font = await measuringDocument.embedFont(Uint8Array.from(atob(FONT_BASE64), (character) => character.charCodeAt(0)));
+  for (const count of [3, 4, 5]) {
+    const threshold = Math.min(3, count - 1);
+    const pads = Array.from({ length: count }, (_, index) => String.fromCharCode(66 + index).repeat(80));
+    const texts = pads.map((pad) => encryptPrefixes(P, pad));
+    const people = keepers(count);
+    people[0].name = "TEST ONLY Keeper 1 José Müller";
+    const document = await PDFDocument.load(await createKeeperCiphertextPdf({ keepers: people, ciphertexts: texts, threshold }));
+    assert.equal(document.getPageCount(), count * 2);
+    assert.match(document.getTitle(), /provider information pack/);
+    assert.match(document.getSubject(), /Provider information pack/);
+    document.getPages().forEach((page, pageIndex) => {
+      const provider = Math.floor(pageIndex / 2);
+      const packPage = pageIndex % 2 + 1;
+      assert.equal(page.getWidth(), 612);
+      assert.equal(page.getHeight(), 792);
+      const drawn = runs(document, page, streamsOf(document, page).join("\n"));
+      const text = drawn.map((run) => run.value);
+      drawn.forEach((run) => {
+        assert.ok(run.x >= 48 - 1e-8, `text starts inside left margin: ${run.value}`);
+        assert.ok(run.x + font.widthOfTextAtSize(run.value, run.size) <= 564 + 1e-8, `text ends inside right margin: ${run.value}`);
+      });
+      assert.ok(text.includes("SHAREKEEPER PROVIDER INFORMATION PACK"));
+      assert.ok(text.includes(people[provider].name));
+      assert.ok(text.some((value) => value.includes(`SHARE 0${provider + 1}  |  ${threshold} OF ${count}`)));
+      assert.ok(text.includes(`Provider ${provider + 1} of ${count} · page ${packPage}/2 of this pack`));
+      assert.ok(text.includes("Sharekeeper.org prototype, not audited. Generated offline in the owner's browser."));
+      const letters = text.filter((value) => /^[A-Z]$/.test(value)).join("");
+      const joined = text.join("\n");
+      if (packPage === 1) {
+        assert.ok(text.includes("What you hold"));
+        assert.equal(letters, texts[provider]);
+        const crc = formatCrc64(ciphertextCrc64(texts[provider]));
+        assert.match(crc, /^[0-9A-F]{4}( [0-9A-F]{4}){3}$/);
+        assert.ok(text.includes(crc));
+        const prose = text.join(" ");
+        assert.ok(prose.includes("CRC-64/XZ of the 80 letters as plain uppercase text, no spaces"));
+        assert.ok(prose.includes(`Any ${threshold} of the ${count} shares are needed; your share alone cannot recover the wallet.`));
+        assert.ok(prose.includes("Check on receipt: recompute the CRC-64/XZ of the 80 letters"));
+        assert.ok(prose.includes("sharekeeper.org/#/tools"));
+        assert.ok(prose.includes("confirm it matches."));
+        assert.deepEqual(text.filter((value) => /^\d{2}$/.test(value)), Array.from({ length: 20 }, (_, index) => String(index + 1).padStart(2, "0")));
+      } else {
+        assert.equal(letters, "");
+        assert.ok(text.includes("Handling a release request"));
+        const prose = text.join(" ");
+        for (const required of [
+          "ciphertext groups 01–02",
+          "Giving groups 01–02 alone does not reveal the share.",
+          "Complete the identity checks agreed with the owner",
+          "notice/waiting period in the agreed release policy",
+          "before releasing anything else.",
+          "provide all 20 groups exactly as written.",
+          "checks them against the CRC64 they hold.",
+          "Never send this pack to anyone else",
+          "never give your groups to another provider",
+          "Keep the paper safe.",
+          "owner's private pad, which you never receive.",
+        ]) assert.ok(prose.includes(required), `release instruction: ${required}`);
+        for (const label of [
+          "Record of agreed terms (fill in by hand)", "Owner reference",
+          "Agreed identity checks", "Agreed notice / waiting period",
+          "Authorised requesters", "Date received", "Provider signature",
+          "Release log", "Date", "Requester", "Groups given", "Notes",
+        ]) assert.ok(text.includes(label), `handwritten field: ${label}`);
+        const content = streamsOf(document, page).join("\n");
+        const tableRules = [...content.matchAll(/^48 ([\d.]+) m\n564 \1 l\nS$/gm)]
+          .map((match) => Number(match[1])).filter((y) => y >= 101 && y <= 211);
+        assert.equal(tableRules.length, 6, "release log has a header and four blank rows");
+      }
+      // No pad or plaintext, nor any other provider's name/ciphertext/CRC, on
+      // either page. Only page 1 may contain the owning provider's ciphertext.
+      for (const pad of pads) assert.ok(!joined.includes(pad) && letters !== pad);
+      assert.ok(!joined.includes(P) && letters !== P);
+      texts.forEach((other, otherIndex) => {
+        if (otherIndex !== provider) {
+          assert.ok(!joined.includes(other) && letters !== other);
+          assert.ok(!joined.includes(formatCrc64(ciphertextCrc64(other))));
+          assert.ok(!joined.includes(ciphertextCrc64(other)));
+          assert.ok(!joined.includes(people[otherIndex].name));
+        }
+      });
+    });
+  }
   const pads = ["B".repeat(80), "C".repeat(80), "D".repeat(80)];
   const texts = pads.map((pad) => encryptPrefixes(P, pad));
   const people = keepers(3);
-  const bytes = await createKeeperCiphertextPdf({ keepers: people, ciphertexts: texts, threshold: 2 });
-  const document = await PDFDocument.load(bytes);
-  assert.equal(document.getPageCount(), 3);
-  document.getPages().forEach((page, index) => {
-    assert.equal(page.getWidth(), 612);
-    assert.equal(page.getHeight(), 792);
-    const text = runs(document, page, streamsOf(document, page).join("\n")).map((r) => r.value);
-    assert.equal(text.filter((v) => /^[A-Z]$/.test(v)).join(""), texts[index]);
-    assert.ok(text.includes(formatCrc64(ciphertextCrc64(texts[index]))));
-    assert.match(formatCrc64(ciphertextCrc64(texts[index])), /^[0-9A-F]{4}( [0-9A-F]{4}){3}$/);
-    assert.ok(text.includes(`TEST ONLY Keeper ${index + 1}`));
-    assert.ok(text.some((v) => v.includes(`SHARE 0${index + 1}  |  2 OF 3`)));
-    const joined = text.join("\n");
-    // No pad or plaintext anywhere; no other keeper's name or ciphertext on this page.
-    assert.ok(!joined.includes(pads[index]) && !joined.includes(P));
-    texts.forEach((other, j) => { if (j !== index) { assert.ok(!joined.includes(formatCrc64(ciphertextCrc64(other)))); assert.ok(!joined.includes(people[j].name)); } });
-  });
   const ok = { keepers: people, ciphertexts: texts, threshold: 2 };
   await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, ciphertexts: texts.slice(0, 2) }));
   await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, threshold: 4 }));
@@ -188,6 +259,21 @@ test("hand-out is one PDF with one page per keeper, each page holding only that 
   await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, ciphertexts: ["a".repeat(80), ...texts.slice(1)] }));
   await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, keepers: [{ name: " " }, ...people.slice(1)] }));
   await assert.rejects(() => createKeeperCiphertextPdf({ keepers: people.slice(0, 2), ciphertexts: texts.slice(0, 2), threshold: 1 }));
+});
+
+test("provider pack shrinks long names within margins and refuses unrenderable or overflowing names", async () => {
+  const ciphertexts = ["A".repeat(80), "B".repeat(80), "C".repeat(80)];
+  const people = keepers(3);
+  people[0].name = "TEST ONLY " + "W".repeat(56);
+  const document = await PDFDocument.load(await createKeeperCiphertextPdf({ keepers: people, ciphertexts, threshold: 2 }));
+  for (const page of document.getPages().slice(0, 2)) {
+    const name = runs(document, page, streamsOf(document, page).join("\n")).find((run) => run.value === people[0].name);
+    assert.ok(name && name.size >= 8 && name.size < 14);
+  }
+  people[0].name = "W".repeat(300);
+  await assert.rejects(() => createKeeperCiphertextPdf({ keepers: people, ciphertexts, threshold: 2 }), /page margins/);
+  people[0].name = "TEST ONLY 山田";
+  await assert.rejects(() => createKeeperCiphertextPdf({ keepers: people, ciphertexts, threshold: 2 }), /font cannot display/);
 });
 
 test("wallet line 01 gets the first bc1q address and a ticked Empty box on every copy", async () => {
