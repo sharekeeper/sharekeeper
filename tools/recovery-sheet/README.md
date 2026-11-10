@@ -86,7 +86,7 @@ Asset provenance and regeneration instructions are in `assets/README.md`. The ge
 
 ## Tools-page CRC64 calculator
 
-The separate website calculator uses the same CRC-64/XZ profile as the sheet (`site/crc64.js`): reflected polynomial `0xC96C5795D7870F42`, initial value and final XOR `0xFFFFFFFFFFFFFFFF`, and an uppercase sixteen-hex-digit result including leading zeroes. The check input `123456789` produces `995DC9BBDF1939FA`; empty input produces `0000000000000000`. Tests compare it with an independent bit-by-bit model and with the CRC64 that `xz` records.
+The separate website calculator uses the same CRC-64/XZ profile as the sheet (`site/crc64.js`): reflected polynomial `0xC96C5795D7870F42`, initial value and final XOR `0xFFFFFFFFFFFFFFFF`, and an uppercase sixteen-hex-digit result including leading zeroes, displayed (and copied) in groups of four such as `995D C9BB DF19 39FA`; the expected-value box accepts the digits with or without spaces. The hand-out and results screen show the ciphertext CRC64 the same way; the sheet's sixteen cells hold one digit each. The check input `123456789` produces `995DC9BBDF1939FA`; empty input produces `0000000000000000`. Tests compare it with an independent bit-by-bit model and with the CRC64 that `xz` records.
 
 Choose UTF-8 text or a local file of at most 10 MiB. Text preserves case, spaces, and Unicode without normalization; the browser textarea represents line breaks as LF, so choose File when original bytes, BOMs, or CRLF line endings must be preserved exactly. Files are read locally and never uploaded; no input is written to browser storage. Optional expected-value comparison and clipboard copying apply only to the checksum, with a manual selection fallback if the clipboard is unavailable.
 

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { crc64Hex, crc64Utf8, MAX_CRC64_BYTES } from "./crc64.js";
+import { crc64Hex, crc64Utf8, formatCrc64, MAX_CRC64_BYTES, normalizeCrc64Input } from "./crc64.js";
 
 const encoder = new TextEncoder();
 
@@ -134,4 +134,12 @@ test("matches the CRC64 that xz records for the same bytes, when xz is installed
     const block = listed.stdout.split("\n").find((line) => line.startsWith("block\t"));
     assert.equal(block.split("\t")[10].toUpperCase(), crc64Hex(bytes));
   }
+});
+
+test("display form groups the 16 digits in fours; input accepts spaces or none", () => {
+  assert.equal(formatCrc64("995DC9BBDF1939FA"), "995D C9BB DF19 39FA");
+  assert.equal(formatCrc64("0000000000000000"), "0000 0000 0000 0000");
+  for (const bad of ["995DC9BBDF1939F", "995dc9bbdf1939fa", "995D C9BB DF19 39FA", 123]) assert.throws(() => formatCrc64(bad), TypeError);
+  for (const ok of ["995DC9BBDF1939FA", "995D C9BB DF19 39FA", " 995d c9bb\tdf19 39fa "]) assert.equal(normalizeCrc64Input(ok), "995DC9BBDF1939FA");
+  for (const bad of ["", "0x995DC9BBDF1939FA", "995D C9BB DF19 39F", "995D-C9BB-DF19-39FA"]) assert.equal(normalizeCrc64Input(bad), "");
 });

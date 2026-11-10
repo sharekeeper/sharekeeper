@@ -15,6 +15,7 @@ import { createKeeperCiphertextPdf } from "./keeper-pdf.js";
 import { generateMasterSecret, thresholdSubsets } from "./master-secret.js";
 import { firstBip84Address, FIRST_ADDRESS_PATH, isP2wpkhAddress } from "./btc-address.js";
 import { checkSubsets } from "./recovery-check.js";
+import { formatCrc64 } from "../site/crc64.js";
 import { combineMnemonics, decodeMnemonic, splitMasterSecret, wordPrefixes } from "./slip39.js";
 import logo from "../assets/logo-with-domain.webp";
 import "./style.css";
@@ -410,7 +411,7 @@ function App() {
             <div className="actions"><a className="primary-button" href={pdfUrl} download="sharekeeper-recovery-sheet-private.pdf" data-testid="download-pdf"><Download size={18} aria-hidden="true" /> Download recovery sheet</a></div>
             <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Sharekeeper hand-out pages</h3><p>One PDF · one page per sharekeeper · their 20 groups of 4 letters and CRC64</p><span>Print it and give each sharekeeper only their own page. Don’t send the file itself to anyone: it holds every sharekeeper’s ciphertext.</span></div></div>
             <div className="actions"><a className="secondary-button" href={keeperPdfUrl} download="sharekeeper-ciphertext-handout.pdf" data-testid="download-ciphertexts"><Download size={18} aria-hidden="true" /> Download hand-out pages</a></div></>}
-            <div className="contact-review">{activeKeepers.map((k, i) => <article key={k.id} className="review-row"><span className="row-number">{String(i + 1).padStart(2, "0")}</span><div><h3>{k.name}</h3><p data-testid={`cipher-summary-${i + 1}`}>First groups {ciphertexts[i]?.slice(0, 4)} {ciphertexts[i]?.slice(4, 8)} · CRC64 {ciphertexts[i] ? ciphertextCrc64(ciphertexts[i]) : ""}</p></div></article>)}</div>
+            <div className="contact-review">{activeKeepers.map((k, i) => <article key={k.id} className="review-row"><span className="row-number">{String(i + 1).padStart(2, "0")}</span><div><h3>{k.name}</h3><p data-testid={`cipher-summary-${i + 1}`}>First groups {ciphertexts[i]?.slice(0, 4)} {ciphertexts[i]?.slice(4, 8)} · CRC64 {ciphertexts[i] ? formatCrc64(ciphertextCrc64(ciphertexts[i])) : ""}</p></div></article>)}</div>
             <div className="address-panel"><h3>First Bitcoin address</h3><p className="address-value" data-testid="btc-address">{btcAddress}</p><p className="technical-note">Native SegWit (bc1q), BIP-84 path {FIRST_ADDRESS_PATH}, derived from the seed with an empty passphrase. {dryRun ? "Practice seed: never send funds to it." : "It is on line 01 of the wallet table, with Empty ticked. After restoring the shares in your wallet with no passphrase, check that its first receive address matches before sending funds."} It is public, but it links this wallet to you, so share it only as needed.</p></div>
             <div className="secret-section"><h3>Plaintext shares</h3>
               <p className="technical-note">{dryRun ? "Practice shares: never use them for real funds. " : ""}These are the {count} SLIP-39 shares; any {threshold} restore the seed in a wallet that supports SLIP-39 recovery. They exist only on this screen{dryRun ? "" : " and are not in either PDF"}. Show one at a time, only where no camera or person can see the screen.</p>

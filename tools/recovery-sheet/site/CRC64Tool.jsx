@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, Copy, FileCheck2, Info } from "lucide-react";
-import { crc64Hex, crc64Utf8, MAX_CRC64_BYTES } from "./crc64.js";
+import { crc64Hex, crc64Utf8, formatCrc64, MAX_CRC64_BYTES, normalizeCrc64Input } from "./crc64.js";
 
 export default function CRC64Tool() {
   const [mode, setMode] = useState("text");
@@ -83,7 +83,7 @@ export default function CRC64Tool() {
     const current = version.current;
     try {
       if (!navigator.clipboard?.writeText) throw new Error("unavailable");
-      await navigator.clipboard.writeText(result.hex);
+      await navigator.clipboard.writeText(formatCrc64(result.hex));
       if (current === version.current) setCopyMessage("Checksum copied.");
     } catch {
       if (current === version.current) {
@@ -95,9 +95,10 @@ export default function CRC64Tool() {
   }
 
   const normalizedExpected = expected.trim().toUpperCase();
-  const expectedValid = /^[0-9A-F]{16}$/.test(normalizedExpected);
+  const expectedHex = normalizeCrc64Input(normalizedExpected);
+  const expectedValid = Boolean(expectedHex);
   const comparison = normalizedExpected && expectedValid && result
-    ? (normalizedExpected === result.hex ? "match" : "mismatch")
+    ? (expectedHex === result.hex ? "match" : "mismatch")
     : null;
 
   return <section className="crc-tool" id="crc64-calculator" aria-labelledby="crc64-heading">
@@ -142,18 +143,18 @@ export default function CRC64Tool() {
       {error && <p className="field-error" role="alert">{error}</p>}
       <div className="crc-result" aria-busy={busy}>
         <label htmlFor="crc64-result">CRC64 hexadecimal</label>
-        <input ref={resultInput} id="crc64-result" readOnly value={result?.hex || ""} placeholder="Not calculated" spellCheck="false" autoComplete="off"
+        <input ref={resultInput} id="crc64-result" readOnly value={result ? formatCrc64(result.hex) : ""} placeholder="Not calculated" spellCheck="false" autoComplete="off"
           onFocus={(event) => event.target.select()} aria-describedby="crc64-result-meta" />
-        <p id="crc64-result-meta">{result ? `${result.bytes.toLocaleString("en-US")} ${result.bytes === 1 ? "byte" : "bytes"} / ${result.source}` : "Sixteen hexadecimal digits, including leading zeroes."}</p>
+        <p id="crc64-result-meta">{result ? `${result.bytes.toLocaleString("en-US")} ${result.bytes === 1 ? "byte" : "bytes"} / ${result.source}` : "Sixteen hexadecimal digits in groups of four, including leading zeroes."}</p>
         <button type="button" className="crc-copy" onClick={copyChecksum} disabled={!result || busy}><Copy size={16} aria-hidden="true" />Copy checksum</button>
         <p className="crc-copy-message" role="status">{copyMessage}</p>
       </div>
       <div className="field">
         <label htmlFor="crc64-expected">Expected checksum <span>(optional)</span></label>
-        <input id="crc64-expected" value={expected} onChange={(event) => setExpected(event.target.value)} placeholder="16 hexadecimal digits" spellCheck="false" autoComplete="off" autoCapitalize="characters"
+        <input id="crc64-expected" value={expected} onChange={(event) => setExpected(event.target.value)} placeholder="16 hex digits, spaces optional" spellCheck="false" autoComplete="off" autoCapitalize="characters"
           aria-describedby="crc64-comparison" aria-invalid={Boolean(normalizedExpected && !expectedValid)} />
         <p id="crc64-comparison" className={`crc-comparison ${comparison === "mismatch" || (normalizedExpected && !expectedValid) ? "field-error" : ""}`} role="status">
-          {normalizedExpected && !expectedValid ? "Enter exactly sixteen hexadecimal characters (0–9, A–F), without a 0x prefix."
+          {normalizedExpected && !expectedValid ? "Enter exactly sixteen hexadecimal characters (0–9, A–F), spaces optional, without a 0x prefix."
             : comparison === "match" ? <><Check size={17} aria-hidden="true" />Checksums match. This is not authentication.</>
               : comparison === "mismatch" ? "Checksums do not match. Check the input bytes and agreed format."
                 : "Optionally compare with a 16-digit CRC64 value."}

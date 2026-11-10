@@ -2,6 +2,7 @@ import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { FONT_BASE64 } from "./pdf-assets.js";
 import { ciphertextCrc64 } from "./cipher.js";
+import { formatCrc64 } from "../site/crc64.js";
 import { isValidThreshold, thresholdOptions } from "../shared/schema.js";
 
 const INK = rgb(0.094118, 0.184314, 0.247059);
@@ -41,7 +42,7 @@ export async function createKeeperCiphertextPdf({ keepers, ciphertexts, threshol
 
   keepers.forEach((keeper, index) => {
     const ciphertext = ciphertexts[index];
-    const crc = ciphertextCrc64(ciphertext);
+    const crc = formatCrc64(ciphertextCrc64(ciphertext));
     const page = document.addPage([PAGE.width, PAGE.height]);
     const text = (value, x, y, size, color = INK) => page.drawText(value, { x, y, size, font, color });
     const share = String(index + 1).padStart(2, "0");
@@ -80,7 +81,7 @@ export async function createKeeperCiphertextPdf({ keepers, ciphertexts, threshol
 
     text("Ciphertext CRC64", 48, 196, 10, MUTED);
     text(crc, 48, 172, 20);
-    text("CRC-64/XZ of the 80 letters above as plain uppercase text, no spaces.", 48, 152, 9, MUTED);
+    text("CRC-64/XZ of the 80 letters above as plain uppercase text, no spaces. Shown in groups of four.", 48, 152, 9, MUTED);
     text("It detects copying mistakes; it is not proof of authenticity.", 48, 140, 9, MUTED);
     page.drawLine({ start: { x: 48, y: 96 }, end: { x: 564, y: 96 }, thickness: 0.6, color: RULE });
     text(`Sharekeeper.org prototype, not audited. Generated offline in the owner's browser. Page ${index + 1} of ${count}.`, 48, 80, 8.5, MUTED);

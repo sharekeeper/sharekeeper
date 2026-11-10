@@ -7,7 +7,7 @@ import { generateMasterSecret, MASTER_SECRET_BYTES, thresholdSubsets } from "../
 import { createKeeperCiphertextPdf } from "../src/keeper-pdf.js";
 import { createRecoveryPdf, CRC_CELL, CRC_DIGIT_SIZE, PREFIX_CELL, PREFIX_LETTER_SIZE, WALLET_ROW1 } from "../src/pdf.js";
 import { blankKeeper } from "../shared/schema.js";
-import { crc64Hex } from "../site/crc64.js";
+import { crc64Hex, formatCrc64 } from "../site/crc64.js";
 
 const P = "ACADACIDACNEACRYADULAGEDAMAZANCEAPARAQUAARMYAUTHAXISBEAMBENCBEST"
   + "BLAZBONDBUDGCALM"; // 80 letters, obviously synthetic test material
@@ -171,13 +171,14 @@ test("hand-out is one PDF with one page per keeper, each page holding only that 
     assert.equal(page.getHeight(), 792);
     const text = runs(document, page, streamsOf(document, page).join("\n")).map((r) => r.value);
     assert.equal(text.filter((v) => /^[A-Z]$/.test(v)).join(""), texts[index]);
-    assert.ok(text.includes(ciphertextCrc64(texts[index])));
+    assert.ok(text.includes(formatCrc64(ciphertextCrc64(texts[index]))));
+    assert.match(formatCrc64(ciphertextCrc64(texts[index])), /^[0-9A-F]{4}( [0-9A-F]{4}){3}$/);
     assert.ok(text.includes(`TEST ONLY Keeper ${index + 1}`));
     assert.ok(text.some((v) => v.includes(`SHARE 0${index + 1}  |  2 OF 3`)));
     const joined = text.join("\n");
     // No pad or plaintext anywhere; no other keeper's name or ciphertext on this page.
     assert.ok(!joined.includes(pads[index]) && !joined.includes(P));
-    texts.forEach((other, j) => { if (j !== index) { assert.ok(!joined.includes(ciphertextCrc64(other))); assert.ok(!joined.includes(people[j].name)); } });
+    texts.forEach((other, j) => { if (j !== index) { assert.ok(!joined.includes(formatCrc64(ciphertextCrc64(other)))); assert.ok(!joined.includes(people[j].name)); } });
   });
   const ok = { keepers: people, ciphertexts: texts, threshold: 2 };
   await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, ciphertexts: texts.slice(0, 2) }));

@@ -62,3 +62,15 @@ export function crc64Utf8(text) {
   }
   return crc64Hex(new TextEncoder().encode(text));
 }
+
+/** Display form: the 16 hex digits in groups of four, e.g. "995D C9BB DF19 39FA". */
+export function formatCrc64(hex) {
+  if (typeof hex !== "string" || !/^[0-9A-F]{16}$/.test(hex)) throw new TypeError("Expected 16 uppercase hexadecimal digits.");
+  return hex.match(/.{4}/g).join(" ");
+}
+
+/** Accepts a typed or pasted value with or without spaces; returns 16 hex digits or "". */
+export function normalizeCrc64Input(text) {
+  const compact = String(text).replace(/\s+/g, "").toUpperCase();
+  return /^[0-9A-F]{16}$/.test(compact) ? compact : "";
+}
