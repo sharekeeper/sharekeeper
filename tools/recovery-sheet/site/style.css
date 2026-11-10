@@ -582,3 +582,8 @@ dd { margin: 0; }
 }
 @media (max-width: 900px) { .shamir-tool { padding: var(--space-8); } .crc-wide { margin-block-end: var(--space-16); } }
 @media (max-width: 640px) { .shamir-tool { padding: var(--space-6) var(--space-5); } }
+.provider-audience { margin-block: var(--space-10) 0; padding: var(--space-8) var(--space-10); border: 1px solid var(--field-border); background: var(--white); }
+.provider-audience h2 { font-size: var(--text-lg, 1.5rem); }
+.provider-audience > p { margin-top: var(--space-3); color: var(--muted); }
+.audience-list { display: grid; gap: var(--space-3); margin: var(--space-5) 0 0; padding-left: var(--space-6); }
+@media (max-width: 640px) { .provider-audience { padding: var(--space-6) var(--space-5); } }

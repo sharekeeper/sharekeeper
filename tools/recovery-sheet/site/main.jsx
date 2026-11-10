@@ -326,6 +326,17 @@ function Providers() {
       <RouteLink to="/apply" className="button">Submit a provider<ArrowUpRight size={18} aria-hidden="true" /></RouteLink>
       <p>Represent an organization? Proposed listings are reviewed before publication.</p>
     </div>
+    <section className="provider-audience container" aria-labelledby="provider-audience-heading">
+      <h2 id="provider-audience-heading">Who the directory is for</h2>
+      <p>Organizations and professionals who could act as independent sharekeepers, including:</p>
+      <ol className="audience-list">
+        <li>Information and software-escrow providers.</li>
+        <li>Trust companies and corporate fiduciaries.</li>
+        <li>Licensed professional fiduciaries.</li>
+        <li>Secure records-storage and vault providers.</li>
+        <li>Digital-asset security and recovery specialists.</li>
+      </ol>
+    </section>
     <section className="directory-section container" aria-label="Search the provider directory">
       <form className="directory-filters" onSubmit={(event) => event.preventDefault()} role="search">
         <div className="search-field"><label htmlFor="provider-search">Search providers</label><div><Search size={20} aria-hidden="true" /><input id="provider-search" type="search" placeholder="Name, location, or service" value={query} onChange={(event) => setQuery(event.target.value)} /></div></div>
