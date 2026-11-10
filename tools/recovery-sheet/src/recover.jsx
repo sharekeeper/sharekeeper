@@ -7,6 +7,7 @@ import { ciphertextCrc64, encryptPrefixes } from "./cipher.js";
 import { firstBip84Address, FIRST_ADDRESS_PATH } from "./btc-address.js";
 import { formatCrc64 } from "../site/crc64.js";
 import logo from "../assets/logo-with-domain.webp";
+import { shareWordsForDisplay } from "./share-words.js";
 
 const { platformPreview: PLATFORM_PREVIEW, siteUrl: SITE_URL, standaloneRecoveryUrl: STANDALONE_URL } = publicNavigationUrls(globalThis.location, globalThis.origin);
 const MAX_SHARES = 5;
@@ -205,7 +206,7 @@ export function RecoverApp() {
             {filled && report.issues.length > 0 && <ul className="recover-issues" data-testid={`recover-issues-${index + 1}`}>{report.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
             {report.ready && <div className="recover-words">
               <button type="button" className="text-button" aria-expanded={shown === index} onClick={() => setShown(shown === index ? -1 : index)} data-testid={`recover-toggle-${index + 1}`}>{shown === index ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}{shown === index ? "Hide share words" : "Show share words"}</button>
-              {shown === index && <article className="share-words"><h3>{practice ? "PRACTICE · " : ""}Share {report.share.memberIndex + 1} of a {report.share.memberThreshold}-of-n set</h3><ol data-testid={`recover-words-${index + 1}`}>{report.mnemonic.split(" ").map((word, w) => <li key={w}>{word}</li>)}</ol></article>}
+              {shown === index && <article className="share-words"><h3>{practice ? "PRACTICE · " : ""}Share {report.share.memberIndex + 1} of a {report.share.memberThreshold}-of-n set</h3><ol data-testid={`recover-words-${index + 1}`}>{shareWordsForDisplay(report.mnemonic).map((word, w) => <li key={w}>{word}</li>)}</ol></article>}
             </div>}
           </article>;
         })}

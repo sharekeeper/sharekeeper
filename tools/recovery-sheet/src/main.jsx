@@ -21,6 +21,7 @@ import { modeFromHash, resolveHashChange } from "./mode.js";
 import { combineMnemonics, decodeMnemonic, splitMasterSecret, wordPrefixes } from "./slip39.js";
 import logo from "../assets/logo-with-domain.webp";
 import "./style.css";
+import { shareWordsForDisplay } from "./share-words.js";
 
 /**
  * The single Sharekeeper workflow: seed → SLIP-39 shares → pads → recovery
@@ -422,7 +423,7 @@ function App({ onLockChange }) {
             <div className="secret-section"><h3>Plaintext shares</h3>
               <p className="technical-note">{dryRun ? "Practice shares: never use them for real funds. " : ""}These are the {count} SLIP-39 shares; any {threshold} restore the seed in a wallet that supports SLIP-39 recovery. They exist only on this screen{dryRun ? "" : " and are not in either PDF"}. Show one at a time, only where no camera or person can see the screen.</p>
               <div className="share-buttons">{shares.map((_, i) => <button key={i} type="button" className="text-button" disabled={offlineBlocked} aria-expanded={shownShare === i} onClick={() => setShownShare(shownShare === i ? -1 : i)} data-testid={`toggle-share-${i + 1}`}>{shownShare === i ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}{shownShare === i ? `Hide share ${String(i + 1).padStart(2, "0")}` : `Show share ${String(i + 1).padStart(2, "0")}`}</button>)}</div>
-              {shownShare >= 0 && !offlineBlocked && <article className="share-words"><h3>{dryRun ? "DRY RUN · " : ""}Share {String(shownShare + 1).padStart(2, "0")} · {activeKeepers[shownShare]?.name}</h3><ol data-testid={`share-words-${shownShare + 1}`}>{shares[shownShare].split(" ").map((word, w) => <li key={w}>{word}</li>)}</ol></article>}
+              {shownShare >= 0 && !offlineBlocked && <article className="share-words"><h3>{dryRun ? "DRY RUN · " : ""}Share {String(shownShare + 1).padStart(2, "0")} · {activeKeepers[shownShare]?.name}</h3><ol data-testid={`share-words-${shownShare + 1}`}>{shareWordsForDisplay(shares[shownShare]).map((word, w) => <li key={w}>{word}</li>)}</ol></article>}
             </div>
             <div className="secret-section"><button className="text-button" aria-expanded={reveal} onClick={() => setReveal(!reveal)} data-testid="toggle-pads">{reveal ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}{reveal ? "Hide pads on screen" : "Show pads on screen"}</button>
               {reveal && <div className="pad-list">{pads.map((pad, i) => <article key={i}><h3>Sharekeeper {i + 1} · Secret pad K</h3><p className="pad-text" data-testid={`pad-${i + 1}`}>{groupPad(pad)}</p></article>)}</div>}
