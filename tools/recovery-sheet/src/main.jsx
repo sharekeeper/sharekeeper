@@ -425,7 +425,7 @@ function App({ onLockChange }) {
                   <div className="own-secret-entry">
                     <input id="own-secret-input" type={showOwnSecret ? "text" : "password"} value={ownSecretText} disabled={busy || offlineBlocked}
                       onChange={(e) => setOwnSecretText(e.target.value)} autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false"
-                      data-lpignore="true" data-1p-ignore="true" inputMode="text" maxLength={80}
+                      data-lpignore="true" data-1p-ignore="true" inputMode="text"
                       aria-invalid={ownSecretText !== "" && ownSecretCheck.status !== "ok" && ownSecretCheck.status !== "short"} aria-describedby="own-secret-status" data-testid="own-secret-input" />
                     <button type="button" className="text-button" onClick={() => setShowOwnSecret(!showOwnSecret)} aria-pressed={showOwnSecret} data-testid="toggle-own-secret-visible">{showOwnSecret ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}{showOwnSecret ? "Hide" : "Show"}</button>
                   </div>

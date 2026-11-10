@@ -43,3 +43,9 @@ test("shares of a supplied secret recover exactly that secret", async () => {
     assert.deepEqual([...recovered], [...secret]);
   }
 });
+
+test("an oversized entry is rejected whole, never accepted as a valid prefix", () => {
+  const valid = HEX.replace(/ /g, "");
+  assert.equal(checkMasterSecretHex(valid + " ".repeat(49) + "abcd").status, "long");
+  assert.equal(checkMasterSecretHex(valid + " ".repeat(500) + "a").status, "long");
+});
