@@ -501,7 +501,7 @@ dd { margin: 0; }
   .faq-list details > p:last-child { padding-bottom: var(--space-4); }
   .tools-grid { margin-block: var(--space-4) var(--space-16); gap: var(--space-6); }
   .featured-tool, .crc-tool { padding: var(--space-6) var(--space-5); }
-  .tool-copy > .button { width: 100%; }
+  .tool-copy > .button, .tool-actions > .button { width: 100%; }
   .tool-copy h2 { font-size: var(--text-section); }
   .tool-sheet-preview { padding: var(--space-5); }
   .preview-title img { width: 120px; }
@@ -567,21 +567,8 @@ dd { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
-.shamir-tool { display: grid; grid-template-columns: minmax(0,1fr); gap: var(--space-6); align-content: start; min-width: 0; padding: var(--space-10); border: 1px solid var(--field-border); background: var(--white); }
-.shamir-tool .tool-facts { margin: 0; }
-.shamir-tool h2 { max-width: none; font-size: var(--text-section); }
-.shamir-tool h2 + p { margin-top: var(--space-5); }
-.shamir-actions { display: grid; gap: var(--space-4); justify-items: start; }
-.shamir-actions .small { margin: 0; }
-.crc-wide { margin-block: 0 var(--space-24); }
-@media (min-width: 901px) {
-  .crc-wide .crc-tool { grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-rows: auto 1fr; column-gap: var(--space-10); }
-  .crc-wide .crc-tool-intro { grid-column: 1; grid-row: 1; }
-  .crc-wide .crc-tool-notes { grid-column: 1; grid-row: 2; }
-  .crc-wide .crc-calculator { grid-column: 2; grid-row: 1 / span 2; }
-}
-@media (max-width: 900px) { .shamir-tool { padding: var(--space-8); } .crc-wide { margin-block-end: var(--space-16); } }
-@media (max-width: 640px) { .shamir-tool { padding: var(--space-6) var(--space-5); } }
+.tool-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-6); }
+.tool-copy > .small { margin-top: var(--space-4); }
 .provider-audience { margin-block: var(--space-10) 0; padding: var(--space-8) var(--space-10); border: 1px solid var(--field-border); background: var(--white); }
 .provider-audience h2 { font-size: var(--text-lg, 1.5rem); }
 .provider-audience > p { margin-top: var(--space-3); color: var(--muted); }

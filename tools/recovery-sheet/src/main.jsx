@@ -17,9 +17,13 @@ import { combineMnemonics, decodeMnemonic, splitMasterSecret, wordPrefixes } fro
 import logo from "../assets/logo-with-domain.webp";
 import "./style.css";
 
-/** Built with `vite build --mode shamir`: the offline seed and SLIP-39 share tool. */
-const SHAMIR = import.meta.env.MODE === "shamir";
-const STEPS = ["Set up", "Sharekeepers", "Add entropy", SHAMIR ? "Generate shares" : "Generate sheet"];
+/**
+ * The single Sharekeeper workflow: seed → SLIP-39 shares → pads → recovery
+ * sheet (3 labeled copies) and sharekeeper hand-out. Real generation runs only
+ * from a local file with no network. An explicitly opted-in dry run works
+ * online but never creates or offers any download.
+ */
+const STEPS = ["Set up", "Sharekeepers", "Add entropy", "Generate seed and shares"];
 function offlineState() {
   const fromFile = globalThis.location?.protocol === "file:";
   const offline = globalThis.navigator?.onLine === false;
@@ -61,6 +65,9 @@ function App() {
   const [keeperPdfUrl, setKeeperPdfUrl] = useState("");
   const [shownShare, setShownShare] = useState(-1);
   const [checkSummary, setCheckSummary] = useState("");
+  const [dryRun, setDryRun] = useState(false);
+  const [dryRunConsent, setDryRunConsent] = useState(false);
+  const dryRunRef = useRef(false);
   const movement = useRef(null);
   movement.current ??= createEntropyCollector();
   const lastPoint = useRef(null);
@@ -73,18 +80,17 @@ function App() {
   const cryptoReady = typeof globalThis.crypto?.getRandomValues === "function" && !!globalThis.crypto?.subtle;
   const activeKeepers = keepers.slice(0, count);
   const entropyReady = userBits >= USER_ENTROPY_TARGET_BITS;
-  const offlineBlocked = SHAMIR && !offline.ready;
+  const offlineBlocked = !dryRun && !offline.ready;
   const keeper = keepers[keeperIndex];
 
   useEffect(() => { headingRef.current?.focus(); }, [stage, keeperIndex]);
   useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
   useEffect(() => () => { if (keeperPdfUrl) URL.revokeObjectURL(keeperPdfUrl); }, [keeperPdfUrl]);
   useEffect(() => {
-    if (!SHAMIR) return undefined;
     const update = () => {
       const next = offlineState();
       setOffline(next);
-      if (!next.ready) {
+      if (!next.ready && !dryRunRef.current) {
         setShownShare(-1);
         if (generationBusy.current) {
           // Invalidate the pending run: it stops at its next check, issues
@@ -173,14 +179,21 @@ function App() {
     setBusy(false);
     setPads([]); setPdfUrl(""); setReveal(false);
     setShares([]); setCiphertexts([]); setKeeperPdfUrl(""); setShownShare(-1); setCheckSummary("");
+    dryRunRef.current = false; setDryRun(false); setDryRunConsent(false);
     setKeepers(Array.from({ length: 5 }, (_, i) => blankKeeper(i + 1)));
     setCount(5); setThreshold(3); setKeeperIndex(0); setAcknowledgments([false, false]);
     resetMovement(); setKeyboardMode(false); setClearDialog(false); go(0);
   }
 
+  function startDryRun() {
+    if (!dryRunConsent || stage !== 0) return;
+    dryRunRef.current = true; setDryRun(true); go(1);
+  }
+
   async function generate() {
     if (generationBusy.current || !cryptoReady || !entropyReady || !acknowledgments.every(Boolean)) return;
-    if (SHAMIR && !offlineState().ready) { setOffline(offlineState()); setFailure("Generation is blocked: open this file from your computer with the network disconnected."); return; }
+    const isDryRun = dryRunRef.current;
+    if (!isDryRun && !offlineState().ready) { setOffline(offlineState()); setFailure("Generation is blocked: open the downloaded file from your computer with the network disconnected, or start an opted-in dry run."); return; }
     const badIndex = activeKeepers.findIndex((k) => Object.keys(contactErrors(k)).length);
     if (badIndex >= 0) { setKeeperIndex(badIndex); go(1); setErrors(contactErrors(activeKeepers[badIndex])); return; }
     generationBusy.current = true;
@@ -189,7 +202,7 @@ function App() {
     let contribution;
     let masterSecret;
     const stillOffline = () => {
-      if (SHAMIR && (version !== generationVersion.current || !offlineState().ready)) {
+      if (version !== generationVersion.current || (!isDryRun && !offlineState().ready)) {
         throw new Error("A network connection appeared during generation, so it was cancelled. Nothing was issued.");
       }
     };
@@ -199,7 +212,7 @@ function App() {
       contribution = movement.current.encode();
       const newPads = await generatePadsWithEntropy(count, contribution);
       let shamir = null;
-      if (SHAMIR) {
+      {
         stillOffline();
         masterSecret = await generateMasterSecret(contribution);
         stillOffline();
@@ -227,20 +240,21 @@ function App() {
         const texts = prefixes.map((p, i) => encryptPrefixes(p, newPads[i]));
         texts.forEach((c, i) => { if (decryptCiphertext(c, newPads[i]) !== prefixes[i]) throw new Error("Cipher check failed. Nothing was issued."); });
         stillOffline();
-        const keeperBytes = await createKeeperCiphertextPdf({ keepers: activeKeepers, ciphertexts: texts, threshold });
+        // A dry run never builds or offers any file.
+        const keeperBytes = isDryRun ? null : await createKeeperCiphertextPdf({ keepers: activeKeepers, ciphertexts: texts, threshold });
         shamir = { mnemonics, texts, keeperBytes, subsetCount: subsets.length };
       }
-      const bytes = await createRecoveryPdf({
+      const bytes = isDryRun ? null : await createRecoveryPdf({
         keepers: activeKeepers, pads: newPads, threshold,
         entropySummary: { sampleCount: movement.current.count, inputKind },
-        ...(shamir ? { cipherGroups: shamir.texts.map(firstCipherGroups), ciphertextCrcs: shamir.texts.map(ciphertextCrc32) } : {}),
+        cipherGroups: shamir.texts.map(firstCipherGroups), ciphertextCrcs: shamir.texts.map(ciphertextCrc32),
       });
       if (version !== generationVersion.current) return;
       stillOffline();
-      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-      if (shamir) {
+      const url = bytes ? URL.createObjectURL(new Blob([bytes], { type: "application/pdf" })) : "";
+      {
         setShares(shamir.mnemonics); setCiphertexts(shamir.texts); setShownShare(-1);
-        setKeeperPdfUrl(URL.createObjectURL(new Blob([shamir.keeperBytes], { type: "application/pdf" })));
+        setKeeperPdfUrl(shamir.keeperBytes ? URL.createObjectURL(new Blob([shamir.keeperBytes], { type: "application/pdf" })) : "");
         setCheckSummary(`Recovery check passed in memory: ${shamir.subsetCount === 1 ? `the only set of ${threshold} shares` : `each of the ${shamir.subsetCount} possible sets of ${threshold} shares`} recovered the seed, and ${threshold - 1} share${threshold - 1 === 1 ? " was" : "s were"} refused. Every ciphertext decrypted back to its share.`);
       }
       movement.current.clear(); setUserBits(0); setSamples(0); setTaps(0);
@@ -274,35 +288,33 @@ function App() {
     <header className="site-header">
       <a href={`${SITE_URL}#/`} target="_blank" rel="noopener noreferrer" className="brand-link" aria-label="ShareKeeper.org home (opens in a new tab, keeping this workspace)" data-testid="link-home"><img src={logo} alt="" width="280" height="93" className="brand" data-testid="img-brand" onError={(e) => { e.currentTarget.hidden = true; }} /></a>
       <div className="header-actions">
-        <span className="local-label"><LockKeyhole size={15} aria-hidden="true" /> {SHAMIR ? "Offline Shamir workspace" : "Browser-only workspace"}</span>
-        {SHAMIR ? null : PLATFORM_PREVIEW
+        <span className="local-label"><LockKeyhole size={15} aria-hidden="true" /> {dryRun ? "Dry run · no downloads" : "Offline workspace"}</span>
+        {offline.fromFile ? null : PLATFORM_PREVIEW
           ? <a className="quiet-link" href={STANDALONE_URL} target="_blank" rel="noopener noreferrer" data-testid="open-standalone">Open standalone app <ArrowRight size={15} aria-hidden="true" /></a>
-          : <a className="quiet-link" href="./sharekeeper-offline.html" download="sharekeeper-offline.html" data-testid="download-offline">Download offline app <Download size={15} aria-hidden="true" /></a>}
-        {!SHAMIR && <a className="quiet-link" href="./sharekeeper-shamir-offline.html" download="sharekeeper-shamir-offline.html" data-testid="download-shamir">Offline Shamir tool <Download size={15} aria-hidden="true" /></a>}
+          : <a className="quiet-link" href="./sharekeeper-offline.html" download="sharekeeper-offline.html" data-testid="download-offline">Download the tool <Download size={15} aria-hidden="true" /></a>}
       </div>
     </header>
     <nav className="tool-site-nav" aria-label="Sharekeeper website">
       <a href={`${SITE_URL}#/tools`} target="_blank" rel="noopener noreferrer" data-testid="link-site-tools"><ArrowLeft size={14} aria-hidden="true" /> Sharekeeper tools</a>
-      <span aria-current="page">{SHAMIR ? "Offline seed and share tool" : "Recovery sheet generator"}</span>
+      <span aria-current="page">Seed, shares and recovery sheet</span>
       <a href={`${SITE_URL}#/providers`} target="_blank" rel="noopener noreferrer" data-testid="link-provider-directory">Provider directory <ArrowRight size={14} aria-hidden="true" /></a>
     </nav>
     <div className="workspace">
       <aside className="workflow" aria-label="Your progress">
         <p className="eyebrow">Recovery tools</p>
-        {SHAMIR
-          ? <><h1>Offline seed<br className="desktop-break" /> and shares</h1><p className="intro">A new wallet seed, split into SLIP-39 shares.<br />Offline, in memory only.</p></>
-          : <><h1>Recovery sheet<br className="desktop-break" /> generator</h1><p className="intro">Your contacts. Your keys.<br />One private recovery sheet.</p></>}
+        <h1>Seed to<br className="desktop-break" /> hand-outs</h1><p className="intro">A new wallet seed, SLIP-39 shares,<br />your recovery sheet and hand-outs.</p>
         <ol className="steps">
           {STEPS.map((label, i) => <li key={label} className={Math.min(stage, 3) === i ? "active" : stage > i ? "complete" : ""} aria-current={Math.min(stage, 3) === i ? "step" : undefined}>
             <span className="step-number">{stage > i ? <Check size={15} aria-hidden="true" /> : String(i + 1).padStart(2, "0")}</span><span>{label}</span>
           </li>)}
         </ol>
-        <div className="sidebar-note"><ShieldCheck size={21} aria-hidden="true" /><p>No account. No uploads.<br />{SHAMIR ? "Seed, shares, contacts and pads stay in this tab’s memory." : "Contacts, movement input, and keys are processed locally."}</p></div>
+        <div className="sidebar-note"><ShieldCheck size={21} aria-hidden="true" /><p>No account. No uploads.<br />Seed, shares, contacts and pads stay in this tab’s memory.</p></div>
         <button className="text-button clear-button" disabled={stage === 0 || busy} onClick={() => setClearDialog(true)} data-testid="button-clear"><Trash2 size={15} aria-hidden="true" /> Clear session</button>
       </aside>
       <main id="main-content" className="main-panel">
-        <div className="panel-topline"><span>Private setup</span><span className="prototype-label">{SHAMIR ? "Prototype · SLIP-39 · offline" : "Prototype · CRC32 sheet"}</span></div>
-        {SHAMIR && <div className={`offline-gate ${offline.ready ? "ready" : ""}`} role="status" data-testid="offline-gate">{offline.ready
+        <div className="panel-topline"><span>Private setup</span><span className="prototype-label">{dryRun ? "Dry run · practice only" : "Prototype · SLIP-39 · offline"}</span></div>
+        {dryRun && <div className="dry-run-banner" role="status" data-testid="dry-run-banner"><Eye size={18} aria-hidden="true" /><span><strong>Dry run: practice only.</strong> Nothing can be downloaded. Never use this seed, these shares or these pads for real funds: this run is in a browser that may be online. Clearing the session ends the dry run.</span></div>}
+        {!dryRun && <div className={`offline-gate ${offline.ready ? "ready" : ""}`} role="status" data-testid="offline-gate">{offline.ready
           ? <><ShieldCheck size={18} aria-hidden="true" /><span>Offline check passed: opened from a local file and the browser reports no network connection.</span></>
           : <><LockKeyhole size={18} aria-hidden="true" /><span>Generation is blocked until {!offline.fromFile ? "you open this downloaded file from your computer (file://)" : ""}{!offline.fromFile && !offline.offline ? " and " : ""}{!offline.offline ? "you disconnect from the network (Wi-Fi off, cable out)" : ""}. This check updates on its own.</span></>}</div>}
         <section className="interview" aria-labelledby="step-heading">
@@ -320,12 +332,23 @@ function App() {
                 <span className="count-value">{n} of {count}</span><span>needed</span><span className="count-detail">{count - n === 0 ? "No spare: lose one, lose all" : `${count - n} can be lost`}</span>{threshold === n && <CheckCircle2 size={18} aria-hidden="true" />}
               </button>)}
             </div></fieldset>
-            <p className="technical-note">Any {threshold} of your {count} sharekeepers can recover{threshold < count ? `; up to ${count - threshold} can be lost or refuse` : ""}. {threshold === count ? "With n equal to m, losing any single sharekeeper makes recovery impossible. " : ""}Only SLIP-39 single-level schemes are offered (one group, 2 ≤ n ≤ m); a threshold of 1 is not, as the spec forbids it with more than one share. {SHAMIR ? `The tool creates ${count} SLIP-39 shares, any ${threshold} of which recover the seed.` : "The sheet records the choice; it prepares pad and contact fields, not the shares themselves."}</p>
+            <p className="technical-note">Any {threshold} of your {count} sharekeepers can recover{threshold < count ? `; up to ${count - threshold} can be lost or refuse` : ""}. {threshold === count ? "With n equal to m, losing any single sharekeeper makes recovery impossible. " : ""}Only SLIP-39 single-level schemes are offered (one group, 2 ≤ n ≤ m); a threshold of 1 is not, as the spec forbids it with more than one share. The tool creates {count} SLIP-39 shares, any {threshold} of which recover the seed.</p>
             <div className="profile-row"><span><strong>{threshold}-of-{count}</strong> sheet layout</span><span><strong>{PAD_LENGTH} letters</strong> per pad</span><span><strong>US Letter</strong> printable PDF</span></div>
-            {SHAMIR
-              ? <div className="plain-note"><LockKeyhole size={19} aria-hidden="true" /><div><h3>This tool creates a new wallet seed.</h3><p>It generates a 128-bit SLIP-39 master secret and its {count} shares (20 words each) in this tab’s memory, encrypts each share with that sharekeeper’s pad, and never stores or sends anything. It does not import an existing seed. Nothing is saved: closing the tab or clearing the session discards it, although the browser may keep copies in memory until they are overwritten.</p></div></div>
-              : <div className="plain-note"><LockKeyhole size={19} aria-hidden="true" /><div><h3>Keep wallet secrets out of this tool.</h3><p>We never ask for a seed phrase, share, or wallet passphrase. This prototype creates pads and a contact sheet, not SLIP-39 shares. To create a seed and shares offline, <a href="./sharekeeper-shamir-offline.html" download="sharekeeper-shamir-offline.html" data-testid="download-shamir-inline">download the offline Shamir tool</a>.</p></div></div>}
-            <div className="actions"><button className="primary-button" onClick={() => go(1)} disabled={!cryptoReady} data-testid="button-start">Continue to contacts <ArrowRight size={17} aria-hidden="true" /></button></div>
+            {<div className="plain-note"><LockKeyhole size={19} aria-hidden="true" /><div><h3>This tool creates a new wallet seed.</h3><p>It generates a 128-bit SLIP-39 master secret and its {count} shares (20 words each) in this tab’s memory, encrypts each share with that sharekeeper’s pad, and never stores or sends anything. It does not import an existing seed. Nothing is saved: closing the tab or clearing the session discards it, although the browser may keep copies in memory until they are overwritten.</p></div></div>}
+            {!dryRun && !offline.ready && <div className="run-paths" data-testid="run-paths">
+              <article className="run-path"><h3>For real: offline</h3><ol>
+                <li>{offline.fromFile ? "You are running the downloaded file." : PLATFORM_PREVIEW
+                  ? <><a href={STANDALONE_URL} target="_blank" rel="noopener noreferrer" data-testid="guide-standalone">Open the standalone tool</a> and download it from there.</>
+                  : <><a href="./sharekeeper-offline.html" download="sharekeeper-offline.html" data-testid="guide-download">Download the tool</a> (one HTML file).</>}</li>
+                <li>Disconnect this computer from the network (Wi-Fi off, cable out).</li>
+                <li>Open the downloaded file in your browser. Generation unlocks on its own once both checks pass.</li>
+              </ol></article>
+              <article className="run-path dry"><h3>Optional: dry run online</h3><p>Walk through every step here to see how it works. Downloads are disabled, and the results are for practice only.</p>
+                <label className="dry-run-consent"><input type="checkbox" checked={dryRunConsent} onChange={(e) => setDryRunConsent(e.target.checked)} data-testid="dry-run-consent" /><span>I understand a dry run creates no files, and I will never use its seed, shares or pads for real funds.</span></label>
+                <button type="button" className="secondary-button" disabled={!dryRunConsent || !cryptoReady} onClick={startDryRun} data-testid="button-dry-run">Start dry run <ArrowRight size={17} aria-hidden="true" /></button>
+              </article>
+            </div>}
+            {!offlineBlocked && <div className="actions"><button className="primary-button" onClick={() => go(1)} disabled={!cryptoReady} data-testid="button-start">{dryRun ? "Continue dry run" : "Continue to contacts"} <ArrowRight size={17} aria-hidden="true" /></button></div>}
           </>}
           {stage === 1 && <>
             <p className="eyebrow">Step 02 / Sharekeeper {keeperIndex + 1} of {count}</p>
@@ -360,73 +383,58 @@ function App() {
           {stage === 3 && <>
             <p className="eyebrow">Step 04 / Review</p>
             <h2 id="step-heading" tabIndex="-1" ref={headingRef}>Check the details before creating keys.</h2>
-            <p className="subheading">{SHAMIR ? `Each sharekeeper gets one SLIP-39 share, encrypted with its own ${PAD_LENGTH}-letter pad. Nothing has been generated yet.` : `Each sharekeeper gets its own ${PAD_LENGTH}-letter pad. No keys have been generated yet.`}</p>
+            <p className="subheading">Each sharekeeper gets one SLIP-39 share, encrypted with its own {PAD_LENGTH}-letter pad. Nothing has been generated yet.</p>
             <div className="contact-review">{activeKeepers.map((k, i) => <article key={k.id} className="review-row"><span className="row-number">{String(i + 1).padStart(2, "0")}</span><div><h3>{k.name || "Contact details missing"}</h3><p>{k.phone || k.website || k.address1 || "Add a contact channel"}</p></div><button className="text-button" disabled={busy} onClick={() => { setKeeperIndex(i); go(1); }} data-testid={`edit-keeper-${i + 1}`}>Edit</button></article>)}</div>
             <div className="mix-summary"><Fingerprint size={20} aria-hidden="true" /><div><strong>Two sources, one local generation</strong><p>{BROWSER_SEED_BITS}-bit browser seed per pad ⊕ {BROWSER_SEED_BITS}-bit block from your {movement.current.count} movement/timing samples (estimated score {Math.min(userBits, 99999)}) → unbiased A–Z selection.</p></div></div>
-            {SHAMIR
-              ? <p className="technical-note">Generation creates a 128-bit master secret (browser CSPRNG ⊕ SHA-512 of your input), splits it into {count} SLIP-39 shares with threshold {threshold} (single-level: one group; extendable, iteration exponent 1, no SLIP-39 passphrase), and checks in memory that every set of {threshold} shares recovers it. Each share’s 80-letter plaintext P is the first 4 letters of its 20 words; ciphertext C = (P + K) mod 26 with A = 0. You get two PDFs: your one unified recovery sheet for all sharekeepers, as 3 labeled copies on 3 pages (COPY 1 OF 3 to COPY 3 OF 3) (contacts, pads, first 2 cipher groups and ciphertext CRC32 filled in), and a hand-out file with one ciphertext page per sharekeeper. Wallet passphrases stay blank.</p>
-              : <p className="technical-note">The PDF holds 3 copies of one sheet, one per page, each labeled COPY n OF 3 in the left margin. Each is the published sample sheet, unchanged, with each sharekeeper’s contact details and secret pad K written into its share section. First cipher groups, the eight-digit ciphertext CRC32, and wallet passphrases stay blank for you to fill in; this is not a complete backup.</p>}
-            <div className="acknowledgments">{(SHAMIR ? [
+            {<p className="technical-note">Generation creates a 128-bit master secret (browser CSPRNG ⊕ SHA-512 of your input), splits it into {count} SLIP-39 shares with threshold {threshold} (single-level: one group; extendable, iteration exponent 1, no SLIP-39 passphrase), and checks in memory that every set of {threshold} shares recovers it. Each share’s 80-letter plaintext P is the first 4 letters of its 20 words; ciphertext C = (P + K) mod 26 with A = 0. {dryRun ? "In a dry run no PDF is created: you see the results on screen only." : "You get two PDFs: your one unified recovery sheet for all sharekeepers, as 3 labeled copies on 3 pages (COPY 1 OF 3 to COPY 3 OF 3) with contacts, pads, first 2 cipher groups and ciphertext CRC32 filled in, and a hand-out file with one ciphertext page per sharekeeper. Wallet passphrases stay blank."}</p>}
+            <div className="acknowledgments">{(dryRun ? [
+              "I understand this is a practice run: nothing will be downloaded, and the results must never be used for real funds.",
+              "I understand that for real use I must download the tool and run it offline.",
+            ] : [
               "I understand this is an unaudited prototype and will test recovery offline, with a small amount first, before relying on it.",
               "I will keep my recovery sheet and the plaintext shares private. Each sharekeeper receives only their own ciphertext page.",
-            ] : [
-              "I understand this is an unaudited prototype and will test the complete recovery process offline before relying on it.",
-              "I will keep the generated PDF private. Pads must never be sent to a sharekeeper.",
             ]).map((text, i) => <label key={i}><input type="checkbox" disabled={busy} checked={acknowledgments[i]} onChange={(e) => setAcknowledgments((old) => old.map((v, j) => j === i ? e.target.checked : v))} data-testid={`ack-${i}`} /><span>{text}</span></label>)}</div>
-            <div className="actions between"><button className="secondary-button" disabled={busy} onClick={() => go(2)} data-testid="button-back"><ArrowLeft size={16} aria-hidden="true" /> Back</button><button className="primary-button" disabled={busy || !cryptoReady || !entropyReady || offlineBlocked || !acknowledgments.every(Boolean)} onClick={generate} data-testid="button-generate">{busy ? "Generating locally…" : SHAMIR ? "Generate seed and shares" : "Generate recovery sheet"}<LockKeyhole size={17} aria-hidden="true" /></button></div>
+            <div className="actions between"><button className="secondary-button" disabled={busy} onClick={() => go(2)} data-testid="button-back"><ArrowLeft size={16} aria-hidden="true" /> Back</button><button className="primary-button" disabled={busy || !cryptoReady || !entropyReady || offlineBlocked || !acknowledgments.every(Boolean)} onClick={generate} data-testid="button-generate">{busy ? "Generating locally…" : dryRun ? "Generate dry run" : "Generate seed and shares"}<LockKeyhole size={17} aria-hidden="true" /></button></div>
           </>}
-          {stage === 4 && SHAMIR && <>
-            <p className="eyebrow">Ready / Private documents</p>
-            <h2 id="step-heading" tabIndex="-1" ref={headingRef}>Your seed and {count} shares are ready.</h2>
+          {stage === 4 && <>
+            <p className="eyebrow">{dryRun ? "Dry run / Practice only" : "Ready / Private documents"}</p>
+            <h2 id="step-heading" tabIndex="-1" ref={headingRef}>{dryRun ? `Dry run complete: a practice seed and ${count} shares.` : `Your seed and ${count} shares are ready.`}</h2>
             <p className="subheading" data-testid="check-summary">{checkSummary}</p>
-            <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Your recovery sheet</h3><p>One unified sheet for all {count} sharekeepers, 3 labeled copies (COPY 1–3 OF 3, one per page) · {threshold} of {count} · contacts, pads, first 2 cipher groups, ciphertext CRC32 · US Letter</p><span>Contains the pads. Keep it private; never give it to a sharekeeper.</span></div></div>
+            {dryRun ? <div className="plain-note dry-note" data-testid="dry-run-no-downloads"><LockKeyhole size={20} aria-hidden="true" /><div><h3>No downloads in a dry run.</h3><p>A real run produces your recovery sheet (one PDF, 3 labeled copies) and the sharekeeper hand-out (one PDF, a page per sharekeeper). To get them, {offline.fromFile ? "disconnect from the network, reopen this file," : PLATFORM_PREVIEW ? <><a href={STANDALONE_URL} target="_blank" rel="noopener noreferrer">open the standalone tool</a>, download it, disconnect,</> : <><a href="./sharekeeper-offline.html" download="sharekeeper-offline.html" data-testid="dry-download">download the tool</a>, disconnect, open the file,</>} and run it again. Your contacts are not carried over.</p></div></div> : <><div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Your recovery sheet</h3><p>One unified sheet for all {count} sharekeepers, 3 labeled copies (COPY 1–3 OF 3, one per page) · {threshold} of {count} · contacts, pads, first 2 cipher groups, ciphertext CRC32 · US Letter</p><span>Contains the pads. Keep it private; never give it to a sharekeeper.</span></div></div>
             <div className="actions"><a className="primary-button" href={pdfUrl} download="sharekeeper-recovery-sheet-private.pdf" data-testid="download-pdf"><Download size={18} aria-hidden="true" /> Download recovery sheet</a></div>
             <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Sharekeeper hand-out pages</h3><p>One PDF · one page per sharekeeper · their 20 groups of 4 letters and CRC32</p><span>Print it and give each sharekeeper only their own page. Don’t send the file itself to anyone: it holds every sharekeeper’s ciphertext.</span></div></div>
-            <div className="actions"><a className="secondary-button" href={keeperPdfUrl} download="sharekeeper-ciphertext-handout.pdf" data-testid="download-ciphertexts"><Download size={18} aria-hidden="true" /> Download hand-out pages</a></div>
+            <div className="actions"><a className="secondary-button" href={keeperPdfUrl} download="sharekeeper-ciphertext-handout.pdf" data-testid="download-ciphertexts"><Download size={18} aria-hidden="true" /> Download hand-out pages</a></div></>}
             <div className="contact-review">{activeKeepers.map((k, i) => <article key={k.id} className="review-row"><span className="row-number">{String(i + 1).padStart(2, "0")}</span><div><h3>{k.name}</h3><p data-testid={`cipher-summary-${i + 1}`}>First groups {ciphertexts[i]?.slice(0, 4)} {ciphertexts[i]?.slice(4, 8)} · CRC32 {ciphertexts[i] ? ciphertextCrc32(ciphertexts[i]) : ""}</p></div></article>)}</div>
             <div className="secret-section"><h3>Plaintext shares</h3>
-              <p className="technical-note">These are the {count} SLIP-39 shares; any {threshold} restore the seed in a wallet that supports SLIP-39 recovery. They exist only on this screen and are not in either PDF. Show one at a time, only where no camera or person can see the screen.</p>
+              <p className="technical-note">{dryRun ? "Practice shares: never use them for real funds. " : ""}These are the {count} SLIP-39 shares; any {threshold} restore the seed in a wallet that supports SLIP-39 recovery. They exist only on this screen{dryRun ? "" : " and are not in either PDF"}. Show one at a time, only where no camera or person can see the screen.</p>
               <div className="share-buttons">{shares.map((_, i) => <button key={i} type="button" className="text-button" disabled={offlineBlocked} aria-expanded={shownShare === i} onClick={() => setShownShare(shownShare === i ? -1 : i)} data-testid={`toggle-share-${i + 1}`}>{shownShare === i ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}{shownShare === i ? `Hide share ${String(i + 1).padStart(2, "0")}` : `Show share ${String(i + 1).padStart(2, "0")}`}</button>)}</div>
-              {shownShare >= 0 && !offlineBlocked && <article className="share-words"><h3>Share {String(shownShare + 1).padStart(2, "0")} · {activeKeepers[shownShare]?.name}</h3><ol data-testid={`share-words-${shownShare + 1}`}>{shares[shownShare].split(" ").map((word, w) => <li key={w}>{word}</li>)}</ol></article>}
+              {shownShare >= 0 && !offlineBlocked && <article className="share-words"><h3>{dryRun ? "DRY RUN · " : ""}Share {String(shownShare + 1).padStart(2, "0")} · {activeKeepers[shownShare]?.name}</h3><ol data-testid={`share-words-${shownShare + 1}`}>{shares[shownShare].split(" ").map((word, w) => <li key={w}>{word}</li>)}</ol></article>}
             </div>
             <div className="secret-section"><button className="text-button" aria-expanded={reveal} onClick={() => setReveal(!reveal)} data-testid="toggle-pads">{reveal ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}{reveal ? "Hide pads on screen" : "Show pads on screen"}</button>
               {reveal && <div className="pad-list">{pads.map((pad, i) => <article key={i}><h3>Sharekeeper {i + 1} · Secret pad K</h3><p className="pad-text" data-testid={`pad-${i + 1}`}>{groupPad(pad)}</p></article>)}</div>}
             </div>
-            <div className="plain-note"><ShieldCheck size={20} aria-hidden="true" /><div><h3>Before relying on it.</h3><p>Restore the wallet from {threshold} shares on an offline device and confirm it shows the addresses you expect, then decrypt one ciphertext page with its pad by hand. Fill in wallet passphrases on paper only. Clear this session when done; nothing is saved.</p></div></div>
-            <button className="secondary-button new-sheet" onClick={() => setClearDialog(true)} data-testid="button-new-sheet">Clear session and start again</button>
-          </>}
-          {stage === 4 && !SHAMIR && <>
-            <p className="eyebrow">Ready / Private document</p>
-            <h2 id="step-heading" tabIndex="-1" ref={headingRef}>Your recovery sheet is ready.</h2>
-            <p className="subheading">Your {count} independently generated pads are in the PDF. Download the same sheet again without changing its keys.</p>
-            <div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Sharekeeper recovery sheet</h3><p>{count} sharekeepers · 80-letter pads · 3 labeled copies (COPY 1–3 OF 3, one per page) · US Letter PDF</p><span>Contains secrets. Store and print privately.</span></div></div>
-            <div className="actions"><a className="primary-button" href={pdfUrl} download="sharekeeper-recovery-sheet-private.pdf" data-testid="download-pdf"><Download size={18} aria-hidden="true" /> Download private PDF</a></div>
-            <p className="technical-note">Print on US Letter at 100% (actual size). Do not use “fit to page” or shrink further; the contact lines and pad cells are small.</p>
-            <div className="secret-section"><button className="text-button" aria-expanded={reveal} onClick={() => setReveal(!reveal)} data-testid="toggle-pads">{reveal ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}{reveal ? "Hide pads on screen" : "Show pads on screen"}</button>
-              {reveal && <div className="pad-list">{pads.map((pad, i) => <article key={i}><h3>Sharekeeper {i + 1} · Secret pad K</h3><p className="pad-text" data-testid={`pad-${i + 1}`}>{groupPad(pad)}</p></article>)}</div>}
-            </div>
-            <div className="plain-note"><ShieldCheck size={20} aria-hidden="true" /><div><h3>Finish setup offline.</h3><p>Creating pads does not create or encrypt SLIP-39 shares. Complete the expected ciphertext groups and CRC32 fields only after actual encryption, verify the complete recovery process, and follow your agreed custody plan.</p></div></div>
-            <button className="secondary-button new-sheet" onClick={() => setClearDialog(true)} data-testid="button-new-sheet">Clear session and start a new sheet</button>
+            {!dryRun && <div className="plain-note"><ShieldCheck size={20} aria-hidden="true" /><div><h3>Before relying on it.</h3><p>Restore the wallet from {threshold} shares on an offline device and confirm it shows the addresses you expect, then decrypt one ciphertext page with its pad by hand. Fill in wallet passphrases on paper only. Clear this session when done; nothing is saved.</p></div></div>}
+            <button className="secondary-button new-sheet" onClick={() => setClearDialog(true)} data-testid="button-new-sheet">{dryRun ? "End dry run and clear" : "Clear session and start again"}</button>
           </>}
           {!cryptoReady && <p className="error-message" role="alert">Web Crypto is unavailable. Use a current browser in a secure context or the downloaded offline app. Generation is blocked; there is no weaker fallback.</p>}
           {failure && <p className="error-message" role="alert" data-testid="generation-error">{failure}</p>}
         </section>
-        <details className="scope-note main-scope"><summary data-testid="toggle-scope">About this prototype and its limits</summary>{PLATFORM_PREVIEW && <p>For an offline app download, use Open standalone app. It opens a fresh GitHub Pages session; your current contacts and keys are not transferred.</p>}<p>The 80-letter profile is an explicit choice for this generator, not a finalized Sharekeeper standard. {SHAMIR ? "The n-of-m header reflects the SLIP-39 shares this tool created; custody terms still need explicit agreement." : "The n-of-m label is a layout setting, not proof that shares exist, and custody terms still need explicit agreement."}</p><p>The updated sample uses an eight-hex-digit CRC32 field. A checksum is not cryptographic authentication; {SHAMIR ? "this tool fills in CRC-32/ISO-HDLC of each 80-letter ciphertext to catch copying mistakes." : "this generator leaves the ciphertext checksum blank."}</p><p>Each pad combines a 200-byte (1600-bit) browser seed with a 200-byte block derived from your input. Block length is not entropy: browser randomness is cryptographic pseudorandomness, and the movement score is a heuristic estimate, not measured entropy. This prototype does not claim information-theoretic one-time-pad security.</p><p>A downloaded PDF contains secret pads. Clearing this tab cannot erase downloads, print queues, screenshots, or all browser memory.</p></details>
+        <details className="scope-note main-scope"><summary data-testid="toggle-scope">About this prototype and its limits</summary>{PLATFORM_PREVIEW && <p>To download the tool, use Open standalone app. It opens a fresh GitHub Pages session; your current contacts and keys are not transferred.</p>}<p>Real generation runs only when this file is opened from your computer (file://) and the browser reports no network connection. That check reflects what the browser reports; it cannot prove the computer is physically disconnected or trustworthy. A dry run skips the check, creates no files, and is for practice only.</p><p>The 80-letter profile is an explicit choice for this tool, not a finalized Sharekeeper standard. The n-of-m header reflects the SLIP-39 shares this tool created; custody terms still need explicit agreement.</p><p>The updated sample uses an eight-hex-digit CRC32 field. A checksum is not cryptographic authentication; this tool fills in CRC-32/ISO-HDLC of each 80-letter ciphertext to catch copying mistakes.</p><p>Each pad combines a 200-byte (1600-bit) browser seed with a 200-byte block derived from your input. Block length is not entropy: browser randomness is cryptographic pseudorandomness, and the movement score is a heuristic estimate, not measured entropy. This prototype does not claim information-theoretic one-time-pad security.</p><p>A downloaded PDF contains secret pads. Clearing this tab cannot erase downloads, print queues, screenshots, or all browser memory.</p></details>
         <footer className="panel-footer"><LockKeyhole size={14} aria-hidden="true" /><span>In-memory only. Refreshing or closing this tab loses the session.</span></footer>
       </main>
       <aside className="sheet-aside" aria-label="Your sheet profile">
         <p className="eyebrow">The document</p>
         <div className="paper-preview" aria-hidden="true">
-          <div className="paper-title">SHAREKEEPER</div><div className="paper-subtitle">PRIVATE PAD WORKSHEET · {threshold} OF {count}</div><div className="paper-instructions" />
+          <div className="paper-title">SHAREKEEPER</div><div className="paper-subtitle">RECOVERY SHEET · {threshold} OF {count} · 3 COPIES</div><div className="paper-instructions" />
           {Array.from({ length: 5 }, (_, i) => <div className={`paper-share ${i >= count ? "unused" : ""}`} key={i}><div className="paper-share-header"><strong>SHARE {String(i + 1).padStart(2, "0")}</strong><span>{i >= count ? "LEFT BLANK" : ""}</span></div><div className="paper-share-content"><div className="paper-contact">{i < count && keepers[i].name ? keepers[i].name : <><i /><i /><i /></>}</div><div className="paper-grid">{Array.from({ length: 20 }, (_, j) => <i key={j} />)}</div></div><div className="paper-hash" /></div>)}
           <div className="paper-wallets"><span>ACCOUNTS / WALLET PASSPHRASES</span>{Array.from({ length: 7 }, (_, i) => <i key={i} />)}</div>
         </div>
         <p className="preview-caption">Layout preview · no secret keys shown</p>
-        <dl className="document-facts"><div><dt>Sharekeepers</dt><dd>{count} independent contacts</dd></div><div><dt>Recovery</dt><dd>Any {threshold} of {count}</dd></div><div><dt>Pad format</dt><dd>20 groups × 4 A–Z letters</dd></div><div><dt>Randomness</dt><dd>Browser RNG + your input</dd></div><div><dt>Output</dt><dd>One private US Letter PDF</dd></div></dl>
+        <dl className="document-facts"><div><dt>Sharekeepers</dt><dd>{count} independent contacts</dd></div><div><dt>Recovery</dt><dd>Any {threshold} of {count}</dd></div><div><dt>Pad format</dt><dd>20 groups × 4 A–Z letters</dd></div><div><dt>Randomness</dt><dd>Browser RNG + your input</dd></div><div><dt>Output</dt><dd>{dryRun ? "None (dry run)" : "Recovery sheet (3 copies) + hand-out"}</dd></div></dl>
       </aside>
     </div>
     <dialog ref={dialogRef} onCancel={(e) => { e.preventDefault(); setClearDialog(false); }} className="clear-dialog" aria-labelledby="clear-heading">
-      <h2 id="clear-heading">Clear this session?</h2><p>Contacts, movement input, and generated pads will be removed from this app’s active state. Downloaded files and printed copies are not deleted, and browser-memory erasure cannot be guaranteed.</p>
+      <h2 id="clear-heading">Clear this session?</h2><p>Contacts, movement input, the seed, shares and pads will be removed from this app’s active state. Downloaded files and printed copies are not deleted, and browser-memory erasure cannot be guaranteed.</p>
       <div className="actions between"><button className="secondary-button" autoFocus onClick={() => setClearDialog(false)} data-testid="cancel-clear">Keep this session</button><button className="primary-button" onClick={clearSession} data-testid="confirm-clear">Clear and start over</button></div>
     </dialog>
   </>;

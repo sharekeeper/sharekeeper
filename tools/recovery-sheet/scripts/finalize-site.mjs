@@ -33,6 +33,8 @@ await copyFile(
 const recovery = await readFile(new URL("recovery.html", dist));
 const offline = await readFile(new URL("sharekeeper-offline.html", dist));
 if (!recovery.equals(offline)) throw new Error("Offline recovery copy must match the pristine recovery build.");
+const legacyShamir = await readFile(new URL("sharekeeper-shamir-offline.html", dist));
+if (!recovery.equals(legacyShamir)) throw new Error("The legacy Shamir download must be the same unified build.");
 const recoveryHtml = recovery.toString("utf8");
 if (!recoveryHtml.includes("connect-src 'none'") || !recoveryHtml.includes("form-action 'none'")) {
   throw new Error("Recovery tool outbound protections were lost.");

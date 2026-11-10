@@ -1,9 +1,8 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { inlineBrowserIcons, removeEmittedFaviconFiles } from "./inline-branding.mjs";
 
-const shamir = process.argv[2] === "shamir";
-const buildDir = new URL(shamir ? "../dist/shamir-build/" : "../dist/", import.meta.url);
+const buildDir = new URL("../dist/", import.meta.url);
 const path = new URL("index.html", buildDir);
 let html = await readFile(path, "utf8");
 html = await inlineBrowserIcons(html);
@@ -25,19 +24,15 @@ const policy = [
   "form-action 'none'",
 ].join("; ");
 html = html.replace("<head>", `<head><meta http-equiv="Content-Security-Policy" content="${policy}">`);
-if (shamir) {
-  // Offline seed + SLIP-39 share tool: a separate single-file download. It is
-  // never served as a hosted page, and it refuses to generate unless opened
-  // from file:// with the browser reporting no network connection.
-  if (!html.includes("Offline seed")) throw new Error("Expected the Shamir build mode.");
-  await writeFile(new URL("../dist/sharekeeper-shamir-offline.html", import.meta.url), html);
-  await rm(buildDir, { recursive: true });
-  console.log("Built sharekeeper-shamir-offline.html; outbound connections blocked.");
-} else {
-  await writeFile(new URL("../dist/recovery.html", import.meta.url), html);
-  // This is the pristine built application, never a serialization of live form
-  // state. Downloading it cannot include contacts, movements, or generated pads.
-  await writeFile(new URL("../dist/sharekeeper-offline.html", import.meta.url), html);
-  await removeEmittedFaviconFiles(new URL("../dist/", import.meta.url));
-  console.log("Built identical recovery.html and offline copies; outbound connections blocked.");
+// One unified workflow app, written to three identical files:
+// recovery.html (hosted entry: guided start + opt-in dry run),
+// sharekeeper-offline.html (the download), and sharekeeper-shamir-offline.html
+// (kept so earlier download links still work). Each is the pristine build,
+// never a serialization of live state, so downloads cannot carry contacts,
+// movement input, seeds, shares or pads.
+if (!html.includes("Seed to")) throw new Error("Expected the unified workflow build.");
+for (const name of ["recovery.html", "sharekeeper-offline.html", "sharekeeper-shamir-offline.html"]) {
+  await writeFile(new URL(`../dist/${name}`, import.meta.url), html);
 }
+await removeEmittedFaviconFiles(new URL("../dist/", import.meta.url));
+console.log("Built identical recovery.html, sharekeeper-offline.html and sharekeeper-shamir-offline.html; outbound connections blocked.");
