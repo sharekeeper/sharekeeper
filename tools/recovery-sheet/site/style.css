@@ -84,6 +84,8 @@ main:focus, .draft-review:focus { outline: none; }
 .hero-bottom { margin-top: var(--space-12); display: flex; gap: var(--space-12); align-items: flex-end; justify-content: space-between; }
 .hero-bottom > p { font-size: clamp(1.18rem, 1rem + .45vw, 1.5rem); line-height: 1.4; max-width: 620px; }
 .hero-bottom .button { flex-shrink: 0; }
+.hero-actions { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-3); flex-shrink: 0; }
+.hero-actions > .button { justify-content: space-between; }
 .draft-notice { padding: var(--space-4) var(--space-5); background: var(--ice); display: flex; align-items: center; gap: var(--space-3); }
 .draft-notice p { font-size: var(--text-small); line-height: 1.45; max-width: 76ch; }
 .draft-notice > a { display: flex; min-height: 44px; gap: var(--space-2); align-items: center; flex-shrink: 0; margin-left: auto; font-size: var(--text-small); font-weight: 600; }
@@ -449,7 +451,7 @@ dd { margin: 0; }
   .home-hero h1 { font-size: clamp(3.8rem, 12vw, 5rem); }
   .hero-bottom { flex-direction: column; margin-top: var(--space-8); gap: var(--space-6); }
   .hero-bottom > p { font-size: 1.2rem; max-width: 34ch; }
-  .hero-bottom > .button { width: 100%; }
+  .hero-bottom > .button, .hero-actions { width: 100%; }
   .draft-notice { display: grid; grid-template-columns: 18px minmax(0,1fr); padding: var(--space-4); align-items: flex-start; gap: var(--space-2); }
   .draft-notice > svg { margin-top: var(--space-1); }
   .draft-notice > p { grid-column: 2; min-width: 0; }

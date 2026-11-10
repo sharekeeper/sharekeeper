@@ -138,7 +138,10 @@ function Home() {
       <h1>Recovery,<br />with a plan.</h1>
       <div className="hero-bottom">
         <p>Sharekeeper.org is developing an open standard for distributed recovery custody, so a recovery plan does not depend on one place or person.</p>
-        <RouteLink to="/standard" className="button">Explore the standard<ArrowRight size={19} aria-hidden="true" /></RouteLink>
+        <div className="hero-actions">
+          <RouteLink to="/tools" className="button" data-testid="home-access-tools">Access Tools<ArrowRight size={19} aria-hidden="true" /></RouteLink>
+          <RouteLink to="/standard" className="button">Explore the standard<ArrowRight size={19} aria-hidden="true" /></RouteLink>
+        </div>
       </div>
     </section>
     <div className="container"><DraftNotice /></div>
