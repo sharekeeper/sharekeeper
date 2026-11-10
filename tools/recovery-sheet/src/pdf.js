@@ -28,9 +28,41 @@ const WALLET_SECTION_Y = 90.78;
 export function sectionMarker(y) {
   return `.8 w\n.72549 .784314 .827451 RG\n1 1 1 rg\nn\n34 ${Number(y.toFixed(2))} m\n`;
 }
+/**
+ * The supplied sample has an eight-cell "Expected Ciphertext CRC32" field per
+ * share. Every export (and the published blank sample) switches it to CRC64:
+ * the two labels and the step-5 instruction say CRC64, eight more cells in the
+ * template's own cell style follow the existing eight, and the "8 hex digits"
+ * hint becomes "16 hex digits", moved right past the new cells. All text stays
+ * in the template's own fonts, which already contain these glyphs.
+ */
+const CRC32_STEP = "(5. Receive all 20 groups; verify the stored CRC32 before decryption.)";
+const CRC32_LABEL = "(Expected Ciphertext CRC32:)";
+const CRC_CELL_STYLE = ".55 w\n.513725 .596078 .666667 RG\n1 1 1 rg\n";
+const fixed4 = (value) => value.toFixed(4).replace(/\.?0+$/, "");
+const fixed2 = (value) => value.toFixed(2).replace(/\.?0+$/, "");
+export function crc64Sheet(text) {
+  const count = (needle) => text.split(needle).length - 1;
+  if (count(CRC32_STEP) !== 1 || count(CRC32_LABEL) !== 5) throw new Error("Template CRC labels changed; review before export.");
+  let updated = text.replace(CRC32_STEP, CRC32_STEP.replace("CRC32", "CRC64")).replaceAll(CRC32_LABEL, "(Expected Ciphertext CRC64:)");
+  for (let slot = 0; slot < 5; slot += 1) {
+    const cellY = fixed2(CRC_CELL.y - slot * KEEPER_STRIDE);
+    const lastCell = `${CRC_CELL_STYLE}n ${fixed4(CRC_CELL.x + 7 * CRC_CELL.width)} ${cellY} 20 20 re S\n`;
+    const hint = `BT 1 0 0 1 749.4121 ${fixed2(1213.78 - slot * KEEPER_STRIDE)} Tm /F3+0 11.5 Tf 13.8 TL (8 hex digits) Tj T* ET\n`;
+    if (updated.split(lastCell).length - 1 !== 1 || updated.split(hint).length - 1 !== 1) {
+      throw new Error("Template CRC cells changed; review before export.");
+    }
+    const extra = Array.from({ length: CRC_DIGITS - 8 }, (_, index) =>
+      `${CRC_CELL_STYLE}n ${fixed4(CRC_CELL.x + (8 + index) * CRC_CELL.width)} ${cellY} 20 20 re S\n`).join("");
+    updated = updated.replace(lastCell, lastCell + extra);
+    updated = updated.replace(hint, hint.replace("749.4121", fixed4(749.4121 + (CRC_DIGITS - 8) * CRC_CELL.width)).replace("(8 hex digits)", `(${CRC_DIGITS} hex digits)`));
+  }
+  return updated;
+}
+
 export function sheetTextFor(text, count, threshold) {
   if (text.split(HEADER_LITERAL).length - 1 !== 1) throw new Error("Template header changed; review before export.");
-  let updated = text.replace(HEADER_LITERAL, `(${threshold} OF ${count}  |`);
+  let updated = crc64Sheet(text).replace(HEADER_LITERAL, `(${threshold} OF ${count}  |`);
   if (count < 5) {
     const markers = [0, 1, 2, 3, 4].map((slot) => sectionMarker(SECTION_TOP_Y - slot * KEEPER_STRIDE)).concat(sectionMarker(WALLET_SECTION_Y));
     for (const marker of markers) {
@@ -92,7 +124,10 @@ export function copyLabel(copy) {
 // FIRST 2 CIPHER GROUPS: two groups of four 14.2 x 26pt cells at x=201 and 269.
 export const PREFIX_CELL = Object.freeze({ xs: [201, 269], y: 1186.78, width: 14.2, height: 26 });
 export const PREFIX_LETTER_SIZE = 13;
-// Expected Ciphertext CRC32: eight 20 x 20pt cells from x=575.4121.
+// Expected Ciphertext CRC64: sixteen 20 x 20pt cells from x=575.4121. The
+// supplied sample had eight (CRC32); the export draws eight more in the same
+// style directly after them (see crc64Sheet).
+export const CRC_DIGITS = 16;
 export const CRC_CELL = Object.freeze({ x: 575.4121, y: 1207.78, width: 20, height: 20 });
 export const CRC_DIGIT_SIZE = 13;
 let glyphMetricFont;
@@ -278,22 +313,41 @@ export function locateTemplateSheet(template) {
 }
 
 /**
- * Load the untouched template. For any sheet other than 3 of 5 the threshold
- * and share-count digits in the header literal change, in the template's own
- * font, and the drawing of each unused share section is removed (left blank).
+ * Load the supplied template and apply the documented changes to its drawing:
+ * the CRC32 field becomes a 16-digit CRC64 field (crc64Sheet), the header's
+ * threshold and share-count digits become the chosen n OF m, in the template's
+ * own font, and the drawing of each unused share section is removed (left
+ * blank). Everything else on the page is the template's own content.
  */
 async function templatePage(count, threshold) {
   const template = await PDFDocument.load(decodeBase64(TEMPLATE_BASE64), { updateMetadata: false });
   const sheet = locateTemplateSheet(template);
-  if (count !== 5 || threshold !== 3) {
-    const updated = sheetTextFor(sheet.text, count, threshold);
-    const fresh = template.context.flateStream(Uint8Array.from(updated, (character) => character.charCodeAt(0)));
-    for (const [key, value] of sheet.stream.dict.entries()) {
-      if (!["/Filter", "/Length", "/DecodeParms"].includes(key.toString())) fresh.dict.set(key, value);
-    }
-    template.context.assign(sheet.ref, fresh);
+  const updated = sheetTextFor(sheet.text, count, threshold);
+  const fresh = template.context.flateStream(Uint8Array.from(updated, (character) => character.charCodeAt(0)));
+  for (const [key, value] of sheet.stream.dict.entries()) {
+    if (!["/Filter", "/Length", "/DecodeParms"].includes(key.toString())) fresh.dict.set(key, value);
   }
+  template.context.assign(sheet.ref, fresh);
   return { template, matrix: sheet.matrix };
+}
+
+/**
+ * The published blank sample: the 3-of-5 template page with the CRC64 field,
+ * copied into a new one-page document (which leaves out the source's Content
+ * Credentials, as they do not attest to a modified sheet). Fixed dates keep
+ * the output byte-for-byte reproducible.
+ */
+export async function blankSamplePdf() {
+  const { template } = await templatePage(5, 3);
+  const document = await PDFDocument.create({ updateMetadata: false });
+  const [page] = await document.copyPages(template, [0]);
+  document.addPage(page);
+  document.setTitle("Sharekeeper SLIP-39 recovery sheet: blank sample (CRC64)");
+  document.setProducer("pdf-lib / Sharekeeper");
+  document.setCreator("Sharekeeper recovery-sheet build");
+  document.setCreationDate(new Date("2026-01-01T00:00:00Z"));
+  document.setModificationDate(new Date("2026-01-01T00:00:00Z"));
+  return document.save({ useObjectStreams: true });
 }
 
 function drawContacts(page, font, rows, offset) {
@@ -322,7 +376,7 @@ function drawCipherGroups(page, font, groups, offset) {
 }
 
 function drawCrc(page, font, crc, offset) {
-  for (let index = 0; index < 8; index += 1) {
+  for (let index = 0; index < CRC_DIGITS; index += 1) {
     drawCentered(page, font, crc[index], CRC_CELL.x + index * CRC_CELL.width, CRC_CELL.y - offset, CRC_CELL.width, CRC_CELL.height, CRC_DIGIT_SIZE);
   }
 }
@@ -348,7 +402,7 @@ function drawPad(page, font, pad, offset) {
  * Generate the one-page recovery sheet entirely in browser memory: the
  * supplied template page, unchanged, with contacts and private pads written
  * into its blank fields. Contacts and pads are never fetched, persisted,
- * logged, or uploaded. Ciphertext prefixes, CRC32 and wallet rows stay blank.
+ * logged, or uploaded. Ciphertext prefixes, CRC64 and wallet rows stay blank.
  */
 export async function createRecoveryPdf({ keepers, pads, entropySummary, threshold, cipherGroups, ciphertextCrcs }) {
   requireKeepers(keepers);
@@ -365,16 +419,16 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary, thresho
        entropySummary.sampleCount < 1 || typeof entropySummary.inputKind !== "string")) {
     throw new Error("PDF entropy summary must contain a positive sampleCount and inputKind text, never raw entropy data.");
   }
-  // Optional, offline Shamir tool only: first two cipher groups and ciphertext CRC32 per keeper.
+  // Optional, offline Shamir tool only: first two cipher groups and ciphertext CRC64 per keeper.
   if ((cipherGroups === undefined) !== (ciphertextCrcs === undefined)) {
-    throw new Error("Cipher groups and ciphertext CRC32 values must be supplied together.");
+    throw new Error("Cipher groups and ciphertext CRC64 values must be supplied together.");
   }
   if (cipherGroups !== undefined && (
     !Array.isArray(cipherGroups) || cipherGroups.length !== keepers.length ||
     cipherGroups.some((value) => typeof value !== "string" || !/^[A-Z]{8}$/.test(value)) ||
     !Array.isArray(ciphertextCrcs) || ciphertextCrcs.length !== keepers.length ||
-    ciphertextCrcs.some((value) => typeof value !== "string" || !/^[0-9A-F]{8}$/.test(value)))) {
-    throw new Error("Each keeper needs 8 cipher-group letters (A–Z) and an 8-digit uppercase hex CRC32.");
+    ciphertextCrcs.some((value) => typeof value !== "string" || !/^[0-9A-F]{16}$/.test(value)))) {
+    throw new Error("Each keeper needs 8 cipher-group letters (A–Z) and a 16-digit uppercase hex CRC64.");
   }
   const { document, font } = await documentAndFont();
   const { errors, layouts } = validateAndLayout(keepers, font);

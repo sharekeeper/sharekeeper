@@ -2,12 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import { PDFDocument, PDFName, decodePDFRawStream } from "pdf-lib";
-import { ciphertextCrc32, decryptCiphertext, encryptPrefixes, firstCipherGroups } from "../src/cipher.js";
+import { ciphertextCrc64, decryptCiphertext, encryptPrefixes, firstCipherGroups } from "../src/cipher.js";
 import { generateMasterSecret, MASTER_SECRET_BYTES, thresholdSubsets } from "../src/master-secret.js";
 import { createKeeperCiphertextPdf } from "../src/keeper-pdf.js";
 import { createRecoveryPdf, CRC_CELL, CRC_DIGIT_SIZE, PREFIX_CELL, PREFIX_LETTER_SIZE } from "../src/pdf.js";
 import { blankKeeper } from "../shared/schema.js";
-import { crc32Hex } from "../site/crc32.js";
+import { crc64Hex } from "../site/crc64.js";
 
 const P = "ACADACIDACNEACRYADULAGEDAMAZANCEAPARAQUAARMYAUTHAXISBEAMBENCBEST"
   + "BLAZBONDBUDGCALM"; // 80 letters, obviously synthetic test material
@@ -32,14 +32,14 @@ test("cipher is per-letter (P + K) mod 26 with A = 0 and decrypts back", () => {
   }
 });
 
-test("ciphertext CRC32 is CRC-32/ISO-HDLC of the 80 ASCII letters, 8 uppercase hex", () => {
-  // Standard check value for CRC-32/ISO-HDLC.
-  assert.equal(crc32Hex(new TextEncoder().encode("123456789")), "CBF43926");
+test("ciphertext CRC64 is CRC-64/XZ of the 80 ASCII letters, 16 uppercase hex", () => {
+  // Catalogue check value for CRC-64/XZ.
+  assert.equal(crc64Hex(new TextEncoder().encode("123456789")), "995DC9BBDF1939FA");
   const c = encryptPrefixes(P, K);
-  const crc = ciphertextCrc32(c);
-  assert.match(crc, /^[0-9A-F]{8}$/);
-  assert.equal(crc, crc32Hex(new TextEncoder().encode(c)));
-  assert.notEqual(crc, ciphertextCrc32(`${c.slice(0, 79)}${c[79] === "A" ? "B" : "A"}`));
+  const crc = ciphertextCrc64(c);
+  assert.match(crc, /^[0-9A-F]{16}$/);
+  assert.equal(crc, crc64Hex(new TextEncoder().encode(c)));
+  assert.notEqual(crc, ciphertextCrc64(`${c.slice(0, 79)}${c[79] === "A" ? "B" : "A"}`));
   assert.equal(firstCipherGroups(c), c.slice(0, 8));
 });
 
@@ -113,12 +113,12 @@ function runs(document, page, overlay) {
   });
 }
 
-test("recovery sheet fills first 2 cipher groups and CRC32 in their template boxes", async () => {
+test("recovery sheet fills first 2 cipher groups and CRC64 in their template boxes", async () => {
   for (const count of [3, 4, 5]) {
     const pads = Array.from({ length: count }, (_, i) => String.fromCharCode(66 + i).repeat(80));
     const texts = pads.map((pad) => encryptPrefixes(P, pad));
     const groups = texts.map(firstCipherGroups);
-    const crcs = texts.map(ciphertextCrc32);
+    const crcs = texts.map(ciphertextCrc64);
     const bytes = await createRecoveryPdf({ keepers: keepers(count), pads, threshold: 2, cipherGroups: groups, ciphertextCrcs: crcs });
     const document = await PDFDocument.load(bytes);
     assert.equal(document.getPageCount(), 3);
@@ -130,7 +130,7 @@ test("recovery sheet fills first 2 cipher groups and CRC32 in their template box
     const inPrefix = prefixRuns.filter((r) => [0, 1, 2, 3, 4].some((slot) => r.y > PREFIX_CELL.y - slot * 200 && r.y < PREFIX_CELL.y - slot * 200 + PREFIX_CELL.height));
     const inCrc = all.filter((r) => r.size === CRC_DIGIT_SIZE && r.x >= CRC_CELL.x && [0, 1, 2, 3, 4].some((slot) => r.y > CRC_CELL.y - slot * 200 && r.y < CRC_CELL.y - slot * 200 + CRC_CELL.height));
     assert.equal(inPrefix.filter((r) => r.x < CRC_CELL.x).length, count * 8);
-    assert.equal(inCrc.length, count * 8);
+    assert.equal(inCrc.length, count * 16);
     for (let slot = 0; slot < count; slot += 1) {
       const letters = inPrefix.filter((r) => r.x < CRC_CELL.x && r.y < PREFIX_CELL.y - slot * 200 + PREFIX_CELL.height && r.y > PREFIX_CELL.y - slot * 200);
       assert.equal(letters.map((r) => r.value).join(""), groups[slot]);
@@ -149,12 +149,14 @@ test("recovery sheet fills first 2 cipher groups and CRC32 in their template box
 test("recovery sheet rejects malformed cipher groups or CRCs", async () => {
   const pads = ["B".repeat(80), "C".repeat(80), "D".repeat(80)];
   const base = { keepers: keepers(3), pads, threshold: 2 };
-  const G = ["ABCDEFGH", "ABCDEFGH", "ABCDEFGH"]; const C = ["00000000", "00000000", "00000000"];
+  const G = ["ABCDEFGH", "ABCDEFGH", "ABCDEFGH"]; const C = ["0000000000000000", "0000000000000000", "0000000000000000"];
   await createRecoveryPdf({ ...base, cipherGroups: G, ciphertextCrcs: C }); // the valid baseline is accepted
   await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: G }));
   await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: ["abcdefgh", ...G.slice(1)], ciphertextCrcs: C }));
-  await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: G, ciphertextCrcs: ["0000000g", ...C.slice(1)] }));
+  await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: G, ciphertextCrcs: ["000000000000000g", ...C.slice(1)] }));
   await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: G.slice(1), ciphertextCrcs: C.slice(1) }));
+  // An old 8-digit CRC32 value is refused, not padded or truncated.
+  await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: G, ciphertextCrcs: ["00000000", ...C.slice(1)] }));
 });
 
 test("hand-out is one PDF with one page per keeper, each page holding only that keeper's name, ciphertext and CRC", async () => {
@@ -169,13 +171,13 @@ test("hand-out is one PDF with one page per keeper, each page holding only that 
     assert.equal(page.getHeight(), 792);
     const text = runs(document, page, streamsOf(document, page).join("\n")).map((r) => r.value);
     assert.equal(text.filter((v) => /^[A-Z]$/.test(v)).join(""), texts[index]);
-    assert.ok(text.includes(ciphertextCrc32(texts[index])));
+    assert.ok(text.includes(ciphertextCrc64(texts[index])));
     assert.ok(text.includes(`TEST ONLY Keeper ${index + 1}`));
     assert.ok(text.some((v) => v.includes(`SHARE 0${index + 1}  |  2 OF 3`)));
     const joined = text.join("\n");
     // No pad or plaintext anywhere; no other keeper's name or ciphertext on this page.
     assert.ok(!joined.includes(pads[index]) && !joined.includes(P));
-    texts.forEach((other, j) => { if (j !== index) { assert.ok(!joined.includes(ciphertextCrc32(other))); assert.ok(!joined.includes(people[j].name)); } });
+    texts.forEach((other, j) => { if (j !== index) { assert.ok(!joined.includes(ciphertextCrc64(other))); assert.ok(!joined.includes(people[j].name)); } });
   });
   const ok = { keepers: people, ciphertexts: texts, threshold: 2 };
   await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, ciphertexts: texts.slice(0, 2) }));

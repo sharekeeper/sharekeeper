@@ -1,4 +1,4 @@
-import { crc32Hex } from "../site/crc32.js";
+import { crc64Hex } from "../site/crc64.js";
 import { PAD_LENGTH } from "../shared/schema.js";
 
 /**
@@ -36,14 +36,14 @@ export function decryptCiphertext(ciphertext, pad) {
 }
 
 /**
- * Ciphertext checksum profile used on the sheet: CRC-32/ISO-HDLC (IEEE) over
- * the 80 ciphertext letters as ASCII uppercase, no spaces or line breaks,
- * shown as 8 uppercase hex digits. The Tools-page calculator gives the same
+ * Ciphertext checksum profile used on the sheet: CRC-64/XZ over the 80
+ * ciphertext letters as ASCII uppercase, no spaces or line breaks, shown as
+ * 16 uppercase hex digits. The Tools-page calculator gives the same
  * value when the 80 letters are pasted as text.
  */
-export function ciphertextCrc32(ciphertext) {
+export function ciphertextCrc64(ciphertext) {
   check("Ciphertext", ciphertext);
-  return crc32Hex(new TextEncoder().encode(ciphertext));
+  return crc64Hex(new TextEncoder().encode(ciphertext));
 }
 
 /** The first two 4-letter cipher groups, as written in FIRST 2 CIPHER GROUPS. */

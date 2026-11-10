@@ -16,6 +16,10 @@ The latest supplied revision labels each verification field `Expected Ciphertext
 
 This revision removes the authentication/notice and release-due header fields, compacts the five keeper cards to a 200-point stride, and expands the account/wallet table from five rows to seven. Recovery steps 6–8 now refer to scratch paper, destroying it after hardware-wallet entry, and signing/broadcasting a transaction before wiping the hardware wallet; step 6 literally ends `into a HW` and needs editorial clarification before this can be treated as a complete recovery procedure.
 
+## CRC64 blank sample
+
+The owner switched the checksum to CRC64 everywhere. `slip39_recovery_sheet.pdf` above stays the unmodified supplied file. `sharekeeper-recovery-sheet-sample-crc64.pdf` is generated from it by `tools/recovery-sheet/scripts/make-blank-sample.mjs` and is the blank sample published on the website. It differs from the supplied page only in the checksum field: both `Expected Ciphertext CRC64:` labels and step 5 say CRC64, each share has sixteen entry cells in the template's own cell style, and the hint reads `16 hex digits`. The tool's profile is CRC-64/XZ over the 80 ciphertext letters as uppercase ASCII with no spaces.
+
 ## Cross-artifact consistency
 
 The [working protocol notes](../../docs/protocol/README.md#open-specification-decisions) track encoding, entry-field, checksum-profile, and release-policy questions against the latest sheet. Instructions removed from earlier revisions are not assumed to remain in force, and the sample is not promoted to a finalized normative standard.
@@ -26,6 +30,6 @@ Only blank templates and explicitly labeled synthetic test fixtures belong in th
 
 ## Browser generator
 
-The [browser-only generator](../../tools/recovery-sheet/README.md) reproduces this sample's page exactly and writes only into its blank fields: each keeper's seven contact lines (Name, Street Address, Street Address 2, State/Country Postal Code, Account No., Phone, Website) and the 80 cells of that share's pad grid. Every other mark on the page, including the instructions, the seven-day release text, labels, and box geometry, is the template's own content stream. For any sheet other than 3 of 5, only the threshold and share-count digits in the header change (to the chosen n OF m), in the template's font; unused share sections stay blank.
+The [browser-only generator](../../tools/recovery-sheet/README.md) reproduces this sample's page exactly and writes only into its blank fields: each keeper's seven contact lines (Name, Street Address, Street Address 2, State/Country Postal Code, Account No., Phone, Website) and the 80 cells of that share's pad grid. Every other mark on the page, including the instructions, the seven-day release text, labels, and box geometry, is the template's own content stream. On every generated sheet the CRC32 field is switched to CRC64 (see below). For any sheet other than 3 of 5, the threshold and share-count digits in the header change (to the chosen n OF m), in the template's font; unused share sections stay blank.
 
-First cipher groups, ciphertext CRC32 cells, and wallet/passphrase entries stay blank; no checksum of a pad is calculated, and no seed or share input is accepted. The generator does not implement or enforce a custody agreement.
+Wallet/passphrase entries stay blank; no checksum of a pad is calculated, and no seed or share input is accepted. The generator does not implement or enforce a custody agreement.

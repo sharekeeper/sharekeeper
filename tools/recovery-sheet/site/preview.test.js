@@ -5,9 +5,12 @@ import { createHash } from "node:crypto";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
-test("public sheet preview is derived from the current canonical blank PDF", async () => {
+test("public sheet preview is derived from the current CRC64 blank sample", async () => {
   const provenance = JSON.parse(await readFile(new URL("./assets/recovery-sheet-preview.provenance.json", import.meta.url), "utf8"));
-  const source = await readFile(new URL("../../../templates/recovery/slip39_recovery_sheet.pdf", import.meta.url));
+  const source = await readFile(new URL(`../../../${provenance.sourceRepositoryPath}`, import.meta.url));
+  const original = await readFile(new URL(`../../../${provenance.derivedFrom.path}`, import.meta.url));
+  assert.equal(provenance.sourceRepositoryPath, "templates/recovery/sharekeeper-recovery-sheet-sample-crc64.pdf");
+  assert.equal(sha256(original), provenance.derivedFrom.sha256, "The supplied template must stay unchanged.");
   const preview = await readFile(new URL(`./assets/${provenance.previewFile}`, import.meta.url));
   assert.equal(sha256(source), provenance.sourceSha256, "Regenerate the visible preview when the canonical blank sheet changes.");
   assert.equal(sha256(preview), provenance.previewSha256, "Preview bytes must match the recorded, inspected rendering.");

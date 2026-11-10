@@ -220,9 +220,9 @@ dd { margin: 0; }
 .crc-calculator input[type="file"] { padding: var(--space-3); font-size: var(--text-small); }
 .crc-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-4); }
 .crc-actions .text-link { min-height: 44px; font-size: var(--text-small); }
-.crc-result { padding: var(--space-5); border-left: 4px solid var(--navy); background: var(--white); min-width: 0; }
+.crc-result { padding: var(--space-5); border-left: 4px solid var(--navy); background: var(--white); min-width: 0; container-type: inline-size; }
 .crc-result > label { font-size: var(--text-small); font-weight: 600; }
-.crc-result > input { border: 0; padding: var(--space-1) 0; font-family: ui-monospace, "Courier New", monospace; font-size: var(--text-section); font-weight: 600; letter-spacing: .05em; min-height: 56px; background: transparent; }
+.crc-result > input { border: 0; padding: var(--space-1) 0; font-family: ui-monospace, "Courier New", monospace; font-size: min(var(--text-section), 7.8cqi); font-weight: 600; letter-spacing: .02em; min-height: 56px; background: transparent; }
 .crc-result > input::placeholder { font-family: var(--font-body); font-size: var(--text-heading); font-weight: 400; letter-spacing: 0; color: var(--muted); opacity: 1; }
 .crc-result > p { font-size: var(--text-small); color: var(--muted); overflow-wrap: anywhere; }
 .crc-copy { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; margin-top: var(--space-2); background: transparent; padding: var(--space-1) 0; font-size: var(--text-small); text-decoration: underline; text-underline-offset: .22em; }

@@ -14,14 +14,14 @@ The latest supplied standalone mark and domain lockup were preserved byte-for-by
 ## Portal and provider registry
 
 - **Navigation:** Home, Standard, Learn, Tools, Providers, and Apply work through real controls, direct hash routes, and browser Back. The separate recovery document is reachable from Tools.
-- **Source fidelity:** The public sample download matches the latest supplied PDF byte-for-byte and visibly includes the first-two-cipher-groups labels and eight-cell CRC32 field.
+- **Source fidelity:** The public sample download is the generated CRC64 blank sample (`templates/recovery/sharekeeper-recovery-sheet-sample-crc64.pdf`), byte-identical to a fresh `blankSamplePdf()` build, and visibly includes the first-two-cipher-groups labels and the sixteen-cell CRC64 field. The supplied PDF itself stays unmodified.
 - **Scope:** Draft status is explicit. The 80-letter tool profile, unresolved checksum serialization, seven-day sample notice, and policy-neutral generator are not silently treated as an approved standard.
 - **Removed diagram:** The protocol-diagram PDF is absent from the current tracked tree, build output, and website links. Older Git history is not rewritten without separate authorization.
 - **Directory:** Initial data contains no invented providers. Search, service/jurisdiction filters, clearing filters, and empty states work. Only approved allowlisted public data may be rendered.
 - **Application:** Public business fields and private reviewer contact are distinguished. Required information and both publication/authority consents gate local draft review. The downloaded draft is marked not submitted.
 - **Intake truthfulness:** An unconfigured private intake must show a setup-needed state, not a Submit/success simulation. Once connected, verify the actual hosted form and durable private response store before claiming live submissions.
 - **Isolation:** The provider portal may permit an explicitly configured Google Forms frame. The recovery document remains independently bundled with outbound connections and forms blocked, and its offline copy remains byte-identical.
-- **Safety:** No provider application asks for recovery secrets, identity-document uploads, or private pads. CRC32 is not advertised as cryptographic authentication.
+- **Safety:** No provider application asks for recovery secrets, identity-document uploads, or private pads. CRC64 is not advertised as cryptographic authentication.
 - **Responsive checks:** Inspect every page at desktop and 375 px, mobile navigation, all form steps and errors, keyboard focus, a short desktop viewport, and desktop/mobile/desktop resizing.
 
 ## Required flows

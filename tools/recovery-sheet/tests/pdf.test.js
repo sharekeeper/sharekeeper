@@ -7,6 +7,7 @@ import { readFile } from "node:fs/promises";
 import { FONT_BASE64, SOURCE_TEMPLATE_SHA256, TEMPLATE_BASE64 } from "../src/pdf-assets.js";
 import {
   CONTACT_FIELDS,
+  blankSamplePdf,
   createRecoveryPdf,
   fitPdfContact,
   measurePdfGlyphBounds,
@@ -110,14 +111,34 @@ async function sourceStream() {
 // is removed, so the area is blank. Used sections and everything else are verbatim.
 const SECTION_START = (y) => `.8 w\n.72549 .784314 .827451 RG\n1 1 1 rg\nn\n34 ${y} m\n`;
 const SECTION_YS = ["1178.78", "978.78", "778.78", "578.78", "378.78", "90.78"];
+// Independent model of the CRC32 -> CRC64 field change, written out with
+// literal coordinates: labels say CRC64, eight extra 20 x 20 cells in the
+// template's cell style follow the eighth cell, and the hint moves right.
+const CELL_STYLE = ".55 w\n.513725 .596078 .666667 RG\n1 1 1 rg\n";
+const CRC_ROWS = [["1207.78", "1213.78"], ["1007.78", "1013.78"], ["807.78", "813.78"], ["607.78", "613.78"], ["407.78", "413.78"]];
+const EXTRA_XS = ["735.4121", "755.4121", "775.4121", "795.4121", "815.4121", "835.4121", "855.4121", "875.4121"];
+function crc64Model(original) {
+  let text = original
+    .replace("(5. Receive all 20 groups; verify the stored CRC32 before decryption.)", "(5. Receive all 20 groups; verify the stored CRC64 before decryption.)")
+    .replaceAll("(Expected Ciphertext CRC32:)", "(Expected Ciphertext CRC64:)");
+  for (const [cellY, hintY] of CRC_ROWS) {
+    const last = `${CELL_STYLE}n 715.4121 ${cellY} 20 20 re S\n`;
+    assert.equal(text.split(last).length - 1, 1);
+    text = text.replace(last, last + EXTRA_XS.map((x) => `${CELL_STYLE}n ${x} ${cellY} 20 20 re S\n`).join(""));
+    const hint = `BT 1 0 0 1 749.4121 ${hintY} Tm /F3+0 11.5 Tf 13.8 TL (8 hex digits) Tj T* ET\n`;
+    assert.equal(text.split(hint).length - 1, 1);
+    text = text.replace(hint, `BT 1 0 0 1 909.4121 ${hintY} Tm /F3+0 11.5 Tf 13.8 TL (16 hex digits) Tj T* ET\n`);
+  }
+  return text;
+}
 function expectedSheet(original, count, threshold) {
-  const text = original.replace("(3 OF 5  |", `(${threshold} OF ${count}  |`);
+  const text = crc64Model(original).replace("(3 OF 5  |", `(${threshold} OF ${count}  |`);
   if (count === 5) return text;
   return text.slice(0, text.indexOf(SECTION_START(SECTION_YS[count]))) + text.slice(text.indexOf(SECTION_START(SECTION_YS[5])));
 }
 
 test("unused share sections are removed whole and used sections stay verbatim", async () => {
-  const original = await sourceStream();
+  const original = crc64Model(await sourceStream());
   SECTION_YS.forEach((y) => assert.equal(original.split(SECTION_START(y)).length - 1, 1, `section at ${y}`));
   const blocks = SECTION_YS.slice(0, 5).map((y, i) => original.slice(original.indexOf(SECTION_START(y)), original.indexOf(SECTION_START(SECTION_YS[i + 1]))));
   blocks.forEach((block, i) => {
@@ -391,4 +412,26 @@ test("optional entropy provenance contains no raw input or bit rating", async ()
     ...fixture(),
     entropySummary: { sampleCount: -1, inputKind: "pointer" },
   }), /entropy summary/);
+});
+
+test("every export and the blank sample carry a 16-cell CRC64 field and no CRC32 text", async () => {
+  const original = await sourceStream();
+  assert.equal(original.split("CRC32").length - 1, 6);
+  for (const count of [3, 4, 5]) {
+    const document = await PDFDocument.load(await createRecoveryPdf({ ...fixture(count), threshold: 2 }));
+    const [stream] = sheetStreams(document, document.getPages()[0].node.Resources());
+    assert.ok(!stream.includes("CRC32"));
+    assert.equal(stream.split("(Expected Ciphertext CRC64:)").length - 1, count);
+    assert.equal(stream.split("(16 hex digits)").length - 1, count);
+    assert.equal((stream.match(/ 20 20 re S$/gm) ?? []).length, count * 16);
+    assert.ok(stream.includes("verify the stored CRC64 before decryption."));
+  }
+  const sample = await blankSamplePdf();
+  assert.deepEqual(sample, await blankSamplePdf(), "blank sample is reproducible");
+  const committed = await readFile(new URL("../../../templates/recovery/sharekeeper-recovery-sheet-sample-crc64.pdf", import.meta.url));
+  assert.deepEqual(Buffer.from(sample), committed, "run node scripts/make-blank-sample.mjs");
+  const document = await PDFDocument.load(sample);
+  assert.equal(document.getPageCount(), 1);
+  const [stream] = sheetStreams(document, document.getPages()[0].node.Resources());
+  assert.equal(stream, expectedSheet(original, 5, 3));
 });

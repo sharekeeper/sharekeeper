@@ -27,7 +27,7 @@ html = html.replace("<head>", `<head><meta http-equiv="Content-Security-Policy" 
 await writeFile(new URL("index.html", dist), html);
 await mkdir(new URL("downloads/", dist), { recursive: true });
 await copyFile(
-  new URL("../../../templates/recovery/slip39_recovery_sheet.pdf", import.meta.url),
+  new URL("../../../templates/recovery/sharekeeper-recovery-sheet-sample-crc64.pdf", import.meta.url),
   new URL("downloads/sharekeeper-recovery-sheet-sample.pdf", dist),
 );
 const recovery = await readFile(new URL("recovery.html", dist));

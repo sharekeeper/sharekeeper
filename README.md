@@ -19,7 +19,7 @@ The native private application inbox is connected through Google Forms. See [pro
 ## Repository contents
 
 - **Recovery-sheet tool:** [Browser-only generator](tools/recovery-sheet/README.md) for a 2–5-sharekeeper interview, mixed-source local pad generation, and a private PDF.
-- **Recovery-sheet prototype:** [Original supplied CRC32 sample and notes](templates/recovery/README.md), with earlier revisions retained in Git history.
+- **Recovery-sheet prototype:** [Supplied sample (CRC32), the published CRC64 blank sample, and notes](templates/recovery/README.md), with earlier revisions retained in Git history.
 - **Protocol notes:** [Working scope and open specification decisions](docs/protocol/README.md).
 - **Branding:** [Current user-supplied logo prototypes](assets/brand/README.md), with earlier revisions retained in Git history.
 

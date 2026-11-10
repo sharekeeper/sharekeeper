@@ -1,7 +1,7 @@
 import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { FONT_BASE64 } from "./pdf-assets.js";
-import { ciphertextCrc32 } from "./cipher.js";
+import { ciphertextCrc64 } from "./cipher.js";
 import { isValidThreshold, thresholdOptions } from "../shared/schema.js";
 
 const INK = rgb(0.094118, 0.184314, 0.247059);
@@ -18,7 +18,7 @@ function decodeBase64(base64) {
 /**
  * One hand-out PDF for the sharekeepers: one US Letter page per keeper, each
  * page holding only that keeper's name, ciphertext (80 letters in 20 numbered
- * groups) and its CRC32. No page contains a pad, plaintext share or seed. The
+ * groups) and its CRC64. No page contains a pad, plaintext share or seed. The
  * owner prints it and gives each sharekeeper only their own page. The owner's
  * unified recovery sheet is a separate PDF. Generated in browser memory only.
  */
@@ -41,7 +41,7 @@ export async function createKeeperCiphertextPdf({ keepers, ciphertexts, threshol
 
   keepers.forEach((keeper, index) => {
     const ciphertext = ciphertexts[index];
-    const crc = ciphertextCrc32(ciphertext);
+    const crc = ciphertextCrc64(ciphertext);
     const page = document.addPage([PAGE.width, PAGE.height]);
     const text = (value, x, y, size, color = INK) => page.drawText(value, { x, y, size, font, color });
     const share = String(index + 1).padStart(2, "0");
@@ -78,9 +78,9 @@ export async function createKeeperCiphertextPdf({ keepers, ciphertexts, threshol
       }
     }
 
-    text("Ciphertext CRC32", 48, 196, 10, MUTED);
+    text("Ciphertext CRC64", 48, 196, 10, MUTED);
     text(crc, 48, 172, 20);
-    text("CRC-32/ISO-HDLC (IEEE) of the 80 letters above as plain uppercase text, no spaces.", 48, 152, 9, MUTED);
+    text("CRC-64/XZ of the 80 letters above as plain uppercase text, no spaces.", 48, 152, 9, MUTED);
     text("It detects copying mistakes; it is not proof of authenticity.", 48, 140, 9, MUTED);
     page.drawLine({ start: { x: 48, y: 96 }, end: { x: 564, y: 96 }, thickness: 0.6, color: RULE });
     text(`Sharekeeper.org prototype, not audited. Generated offline in the owner's browser. Page ${index + 1} of ${count}.`, 48, 80, 8.5, MUTED);

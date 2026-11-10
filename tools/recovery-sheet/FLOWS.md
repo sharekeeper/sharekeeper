@@ -2,7 +2,13 @@
 
 The hosted baseline was opened before these edits. It shows the supplied domain logo, the setup question, 3/4/5 keeper choices, and the fixed-threshold explanation; the recovery application has no database or persistent user storage.
 
-## Local CRC32 calculator
+## CRC64 everywhere (current)
+
+- Tools calculator, recovery sheet, hand-outs and copy use CRC-64/XZ, sixteen uppercase hex digits. Expect: check value 995DC9BBDF1939FA for 123456789; a share's 80 ciphertext letters pasted as text give the CRC64 printed on its sheet and hand-out.
+- Generated sheets and the blank sample show `Expected Ciphertext CRC64:`, sixteen cells, `16 hex digits`, and step 5 says CRC64; no CRC32 text remains. The supplied template file is unchanged.
+- Older sections below describe the earlier CRC32 profile and are kept as history.
+
+## Local CRC32 calculator (history)
 
 - Baseline: The live Tools page was opened before editing and contains the recovery generator, boundaries, and reference downloads, but no checksum calculator.
 - Add a clearly labeled CRC32 checksum calculator directly on Tools, matching the existing navy/cyan design at desktop and 375 px.
