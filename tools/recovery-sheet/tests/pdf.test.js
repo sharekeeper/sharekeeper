@@ -138,7 +138,7 @@ test("the template's contact rows and pad cells are where the generator writes",
 
 test("3/4/5 exports reproduce the template page unchanged and only fill contacts and pads", async () => {
   const original = await sourceStream();
-  for (const count of [2, 3, 4, 5]) {
+  for (const count of [3, 4, 5]) {
     const input = fixture(count);
     input.keepers[0].reference = "  Exact CASE / ref.  ";
     input.keepers[0].website = "https://gpy.invalid/gpy";
@@ -261,7 +261,7 @@ test("long contacts fail before export rather than silently truncating", async (
 
 test("every n-of-m choice changes only the header digits and title", async () => {
   const original = await sourceStream();
-  for (const count of [2, 3, 4, 5]) {
+  for (const count of [3, 4, 5]) {
     for (const threshold of thresholdOptions(count)) {
       const document = await PDFDocument.load(await createRecoveryPdf({ ...fixture(count), threshold }));
       assert.equal(document.getTitle(), `Sharekeeper SLIP-39 recovery sheet: ${threshold} of ${count}`);
@@ -269,20 +269,26 @@ test("every n-of-m choice changes only the header digits and title", async () =>
       assert.equal(stream, original.replace("(3 OF 5  |", `(${threshold} OF ${count}  |`));
     }
   }
-  for (const threshold of [0, 1, 6, 2.5, "3"]) {
-    await assert.rejects(createRecoveryPdf({ ...fixture(5), threshold }), /threshold must be one of 2, 3, 4, 5 for 5/);
+  for (const threshold of [0, 1, 5, 6, 2.5, "3"]) {
+    await assert.rejects(createRecoveryPdf({ ...fixture(5), threshold }), /threshold must be one of 2, 3, 4 for 5/);
   }
-  await assert.rejects(createRecoveryPdf({ ...fixture(3), threshold: 4 }), /one of 2, 3 for 3/);
-  await assert.rejects(createRecoveryPdf({ ...fixture(3), threshold: 1 }), /one of 2, 3 for 3/);
-  await assert.rejects(createRecoveryPdf({ ...fixture(2), threshold: 1 }), /one of 2 for 2/);
-  assert.deepEqual(thresholdOptions(2), [2]);
-  assert.deepEqual(thresholdOptions(3), [2, 3]);
-  assert.deepEqual(thresholdOptions(5), [2, 3, 4, 5]);
+  await assert.rejects(createRecoveryPdf({ ...fixture(3), threshold: 4 }), /one of 2 for 3/);
+  await assert.rejects(createRecoveryPdf({ ...fixture(3), threshold: 1 }), /one of 2 for 3/);
+  await assert.rejects(createRecoveryPdf({ ...fixture(3), threshold: 3 }), /one of 2 for 3/);
+  await assert.rejects(createRecoveryPdf({ ...fixture(5), threshold: 5 }), /one of 2, 3, 4 for 5/);
+  await assert.rejects(createRecoveryPdf({ ...fixture(2), threshold: 1 }), /3, 4, or 5/);
+  await assert.rejects(createRecoveryPdf({ ...fixture(2), threshold: 2 }), /3, 4, or 5/);
+    assert.deepEqual(thresholdOptions(3), [2]);
+  assert.deepEqual(thresholdOptions(5), [2, 3, 4]);
+  assert.deepEqual(thresholdOptions(4), [2, 3]);
+  assert.deepEqual(thresholdOptions(2), []);
+  for (const m of [3, 4, 5]) for (const n of thresholdOptions(m)) assert.ok(n <= m - 1 && n >= 2);
 });
 
 test("rejects invalid keeper counts and malformed or mismatched pads", async () => {
-  await assert.rejects(createRecoveryPdf(fixture(1)), /2, 3, 4, or 5/);
-  await assert.rejects(createRecoveryPdf(fixture(6)), /2, 3, 4, or 5/);
+  await assert.rejects(createRecoveryPdf(fixture(1)), /3, 4, or 5/);
+  await assert.rejects(createRecoveryPdf(fixture(2)), /3, 4, or 5/);
+  await assert.rejects(createRecoveryPdf(fixture(6)), /3, 4, or 5/);
   await assert.rejects(createRecoveryPdf({ ...fixture(), pads: ["A".repeat(80)] }), /80-letter/);
   for (const pad of ["A".repeat(79), "A".repeat(81), "a".repeat(80), `${"A".repeat(79)}0`, ""]) {
     const input = fixture();

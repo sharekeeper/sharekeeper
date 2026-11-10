@@ -23,8 +23,8 @@ function decodeBase64(base64) {
  * unified recovery sheet is a separate PDF. Generated in browser memory only.
  */
 export async function createKeeperCiphertextPdf({ keepers, ciphertexts, threshold }) {
-  if (!Array.isArray(keepers) || !Array.isArray(ciphertexts) || keepers.length !== ciphertexts.length || keepers.length < 2 || keepers.length > 5) {
-    throw new Error("Ciphertext hand-out needs one ciphertext per sharekeeper (2 to 5).");
+  if (!Array.isArray(keepers) || !Array.isArray(ciphertexts) || keepers.length !== ciphertexts.length || keepers.length < 3 || keepers.length > 5) {
+    throw new Error("Ciphertext hand-out needs one ciphertext per sharekeeper (3 to 5).");
   }
   const count = keepers.length;
   if (!isValidThreshold(threshold, count)) {

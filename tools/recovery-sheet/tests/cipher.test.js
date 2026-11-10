@@ -114,7 +114,7 @@ function runs(document, page, overlay) {
 }
 
 test("recovery sheet fills first 2 cipher groups and CRC32 in their template boxes", async () => {
-  for (const count of [2, 3, 5]) {
+  for (const count of [3, 4, 5]) {
     const pads = Array.from({ length: count }, (_, i) => String.fromCharCode(66 + i).repeat(80));
     const texts = pads.map((pad) => encryptPrefixes(P, pad));
     const groups = texts.map(firstCipherGroups);
@@ -147,12 +147,14 @@ test("recovery sheet fills first 2 cipher groups and CRC32 in their template box
 });
 
 test("recovery sheet rejects malformed cipher groups or CRCs", async () => {
-  const pads = ["B".repeat(80), "C".repeat(80)];
-  const base = { keepers: keepers(2), pads, threshold: 2 };
-  await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: ["ABCDEFGH", "ABCDEFGH"] }));
-  await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: ["abcdefgh", "ABCDEFGH"], ciphertextCrcs: ["00000000", "00000000"] }));
-  await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: ["ABCDEFGH", "ABCDEFGH"], ciphertextCrcs: ["0000000g", "00000000"] }));
-  await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: ["ABCDEFGH"], ciphertextCrcs: ["00000000"] }));
+  const pads = ["B".repeat(80), "C".repeat(80), "D".repeat(80)];
+  const base = { keepers: keepers(3), pads, threshold: 2 };
+  const G = ["ABCDEFGH", "ABCDEFGH", "ABCDEFGH"]; const C = ["00000000", "00000000", "00000000"];
+  await createRecoveryPdf({ ...base, cipherGroups: G, ciphertextCrcs: C }); // the valid baseline is accepted
+  await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: G }));
+  await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: ["abcdefgh", ...G.slice(1)], ciphertextCrcs: C }));
+  await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: G, ciphertextCrcs: ["0000000g", ...C.slice(1)] }));
+  await assert.rejects(() => createRecoveryPdf({ ...base, cipherGroups: G.slice(1), ciphertextCrcs: C.slice(1) }));
 });
 
 test("hand-out is one PDF with one page per keeper, each page holding only that keeper's name, ciphertext and CRC", async () => {
@@ -178,6 +180,7 @@ test("hand-out is one PDF with one page per keeper, each page holding only that 
   const ok = { keepers: people, ciphertexts: texts, threshold: 2 };
   await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, ciphertexts: texts.slice(0, 2) }));
   await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, threshold: 4 }));
+  await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, threshold: 3 })); // n must be at most m − 1
   await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, threshold: 1 }));
   await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, ciphertexts: ["a".repeat(80), ...texts.slice(1)] }));
   await assert.rejects(() => createKeeperCiphertextPdf({ ...ok, keepers: [{ name: " " }, ...people.slice(1)] }));

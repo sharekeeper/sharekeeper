@@ -216,7 +216,7 @@ function App() {
         stillOffline();
         masterSecret = await generateMasterSecret(contribution);
         stillOffline();
-        if (!isValidThreshold(threshold, count)) throw new Error("Only SLIP-39 single-level schemes with 2 ≤ n ≤ m are supported. Nothing was issued.");
+        if (!isValidThreshold(threshold, count)) throw new Error("Only SLIP-39 single-level schemes with 2 ≤ n ≤ m − 1 are supported. Nothing was issued.");
         const mnemonics = await splitMasterSecret({ masterSecret, threshold, shareCount: count, crypto: globalThis.crypto });
         mnemonics.forEach((m, i) => {
           const d = decodeMnemonic(m);
@@ -321,18 +321,18 @@ function App() {
           {stage === 0 && <>
             <p className="eyebrow">Step 01 / Set up</p>
             <h2 id="step-heading" tabIndex="-1" ref={headingRef}>How many sharekeepers, and how many to recover?</h2>
-            <p className="subheading">Choose 2–5 independent sharekeepers (m) and how many of them are needed to recover (n). We’ll guide you through their contact details, then generate a separate pad for each.</p>
+            <p className="subheading">Choose 3–5 independent sharekeepers (m) and how many of them are needed to recover (n), always at least one fewer than m. We’ll guide you through their contact details, then generate a separate pad for each.</p>
             <fieldset className="count-fieldset"><legend>Number of sharekeepers</legend><div className="count-options">
-              {KEEPER_COUNTS.map((n) => <button key={n} type="button" aria-pressed={count === n} className={count === n ? "count-option selected" : "count-option"} onClick={() => { setCount(n); setThreshold((t) => Math.min(Math.max(t, 2), n)); }} data-testid={`count-${n}`}>
+              {KEEPER_COUNTS.map((n) => <button key={n} type="button" aria-pressed={count === n} className={count === n ? "count-option selected" : "count-option"} onClick={() => { setCount(n); setThreshold((t) => Math.min(Math.max(t, 2), n - 1)); }} data-testid={`count-${n}`}>
                 <span className="count-value">{n}</span><span>sharekeepers</span><span className="count-detail">One pad per keeper</span>{count === n && <CheckCircle2 size={18} aria-hidden="true" />}
               </button>)}
             </div></fieldset>
             <fieldset className="count-fieldset threshold-fieldset"><legend>Sharekeepers needed to recover</legend><div className="count-options">
               {thresholdOptions(count).map((n) => <button key={n} type="button" aria-pressed={threshold === n} className={threshold === n ? "count-option selected" : "count-option"} onClick={() => setThreshold(n)} data-testid={`threshold-${n}`}>
-                <span className="count-value">{n} of {count}</span><span>needed</span><span className="count-detail">{count - n === 0 ? "No spare: lose one, lose all" : `${count - n} can be lost`}</span>{threshold === n && <CheckCircle2 size={18} aria-hidden="true" />}
+                <span className="count-value">{n} of {count}</span><span>needed</span><span className="count-detail">{`${count - n} can be lost`}</span>{threshold === n && <CheckCircle2 size={18} aria-hidden="true" />}
               </button>)}
             </div></fieldset>
-            <p className="technical-note">Any {threshold} of your {count} sharekeepers can recover{threshold < count ? `; up to ${count - threshold} can be lost or refuse` : ""}. {threshold === count ? "With n equal to m, losing any single sharekeeper makes recovery impossible. " : ""}Only SLIP-39 single-level schemes are offered (one group, 2 ≤ n ≤ m); a threshold of 1 is not, as the spec forbids it with more than one share. The tool creates {count} SLIP-39 shares, any {threshold} of which recover the seed.</p>
+            <p className="technical-note">Any {threshold} of your {count} sharekeepers can recover; up to {count - threshold} can be lost or refuse. The number needed is always at least one fewer than the total, so losing one sharekeeper never makes recovery impossible. Only SLIP-39 single-level schemes are offered (one group, 2 ≤ n ≤ m − 1); a threshold of 1 is not, as the spec forbids it with more than one share. The tool creates {count} SLIP-39 shares, any {threshold} of which recover the seed.</p>
             <div className="profile-row"><span><strong>{threshold}-of-{count}</strong> sheet layout</span><span><strong>{PAD_LENGTH} letters</strong> per pad</span><span><strong>US Letter</strong> printable PDF</span></div>
             {<div className="plain-note"><LockKeyhole size={19} aria-hidden="true" /><div><h3>This tool creates a new wallet seed.</h3><p>It generates a 128-bit SLIP-39 master secret and its {count} shares (20 words each) in this tab’s memory, encrypts each share with that sharekeeper’s pad, and never stores or sends anything. It does not import an existing seed. Nothing is saved: closing the tab or clearing the session discards it, although the browser may keep copies in memory until they are overwritten.</p></div></div>}
             {!dryRun && !offline.ready && <div className="run-paths" data-testid="run-paths">

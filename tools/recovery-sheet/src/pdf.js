@@ -77,7 +77,7 @@ function decodeBase64(base64) {
 
 function requireKeepers(keepers) {
   if (!Array.isArray(keepers) || !KEEPER_COUNTS.includes(keepers.length)) {
-    throw new Error("PDF export requires exactly 2, 3, 4, or 5 keepers.");
+    throw new Error("PDF export requires exactly 3, 4, or 5 keepers.");
   }
 }
 
