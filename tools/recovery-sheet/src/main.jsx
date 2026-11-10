@@ -13,6 +13,7 @@ import { contactErrors } from "./contacts.js";
 import { ciphertextCrc64, decryptCiphertext, encryptPrefixes, firstCipherGroups } from "./cipher.js";
 import { createKeeperCiphertextPdf } from "./keeper-pdf.js";
 import { generateMasterSecret, thresholdSubsets } from "./master-secret.js";
+import { checkMasterSecretHex, masterSecretFromHex, OWN_SECRET_HEX_DIGITS } from "./own-secret.js";
 import { firstBip84Address, FIRST_ADDRESS_PATH, isP2wpkhAddress } from "./btc-address.js";
 import { checkSubsets } from "./recovery-check.js";
 import { formatCrc64 } from "../site/crc64.js";
@@ -74,6 +75,12 @@ function App({ onLockChange }) {
   const [checkSummary, setCheckSummary] = useState("");
   const [dryRun, setDryRun] = useState(false);
   const [dryRunConsent, setDryRunConsent] = useState(false);
+  // Optional: the user's own 128-bit SLIP-39 master secret. Off by default,
+  // never available in a dry run, held only in this component's state.
+  const [useOwnSecret, setUseOwnSecret] = useState(false);
+  const [ownSecretText, setOwnSecretText] = useState("");
+  const [showOwnSecret, setShowOwnSecret] = useState(false);
+  const [secretSource, setSecretSource] = useState("generated");
   const dryRunRef = useRef(false);
   const movement = useRef(null);
   movement.current ??= createEntropyCollector();
@@ -89,6 +96,8 @@ function App({ onLockChange }) {
   const entropyReady = userBits >= USER_ENTROPY_TARGET_BITS;
   const offlineBlocked = !dryRun && !offline.ready;
   const keeper = keepers[keeperIndex];
+  const ownSecretCheck = checkMasterSecretHex(ownSecretText);
+  const ownSecretBlocked = useOwnSecret && (dryRun || ownSecretCheck.status !== "ok");
 
   useEffect(() => { headingRef.current?.focus(); }, [stage, keeperIndex]);
   useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
@@ -103,6 +112,7 @@ function App({ onLockChange }) {
       setOffline(next);
       if (!next.ready && !dryRunRef.current) {
         setShownShare(-1);
+        setOwnSecretText(""); setShowOwnSecret(false);
         if (generationBusy.current) {
           // Invalidate the pending run: it stops at its next check, issues
           // nothing, and its finally block wipes the sensitive buffers.
@@ -191,6 +201,7 @@ function App({ onLockChange }) {
     setPads([]); setPdfUrl(""); setReveal(false);
     setShares([]); setCiphertexts([]); setBtcAddress(""); setKeeperPdfUrl(""); setShownShare(-1); setCheckSummary("");
     dryRunRef.current = false; setDryRun(false); setDryRunConsent(false);
+    setUseOwnSecret(false); setOwnSecretText(""); setShowOwnSecret(false); setSecretSource("generated");
     setKeepers(Array.from({ length: 5 }, (_, i) => blankKeeper(i + 1)));
     setCount(5); setThreshold(3); setKeeperIndex(0); setAcknowledgments([false, false]);
     resetMovement(); setKeyboardMode(false); setClearDialog(false); go(0);
@@ -198,12 +209,16 @@ function App({ onLockChange }) {
 
   function startDryRun() {
     if (!dryRunConsent || stage !== 0) return;
+    setUseOwnSecret(false); setOwnSecretText(""); setShowOwnSecret(false);
     dryRunRef.current = true; setDryRun(true); go(1);
   }
 
   async function generate() {
     if (generationBusy.current || !cryptoReady || !entropyReady || !acknowledgments.every(Boolean)) return;
     const isDryRun = dryRunRef.current;
+    const ownSecret = useOwnSecret;
+    if (ownSecret && isDryRun) { setFailure("Your own master secret cannot be used in a dry run. Nothing was generated."); return; }
+    if (ownSecret && checkMasterSecretHex(ownSecretText).status !== "ok") { setFailure(checkMasterSecretHex(ownSecretText).message); return; }
     if (!isDryRun && !offlineState().ready) { setOffline(offlineState()); setFailure("Generation is blocked: open the downloaded file from your computer with the network disconnected, or start an opted-in dry run."); return; }
     const badIndex = activeKeepers.findIndex((k) => Object.keys(contactErrors(k)).length);
     if (badIndex >= 0) { setKeeperIndex(badIndex); go(1); setErrors(contactErrors(activeKeepers[badIndex])); return; }
@@ -225,7 +240,7 @@ function App({ onLockChange }) {
       let shamir = null;
       {
         stillOffline();
-        masterSecret = await generateMasterSecret(contribution);
+        masterSecret = ownSecret ? masterSecretFromHex(ownSecretText) : await generateMasterSecret(contribution);
         stillOffline();
         if (!isValidThreshold(threshold, count)) throw new Error("Only SLIP-39 single-level schemes with 2 ≤ n ≤ m − 1 are supported. Nothing was issued.");
         const mnemonics = await splitMasterSecret({ masterSecret, threshold, shareCount: count, crypto: globalThis.crypto });
@@ -272,6 +287,7 @@ function App({ onLockChange }) {
         setCheckSummary(`Recovery check passed in memory: ${shamir.subsetCount === 1 ? `the only set of ${threshold} shares` : `each of the ${shamir.subsetCount} possible sets of ${threshold} shares`} recovered the seed, and ${threshold - 1} share${threshold - 1 === 1 ? " was" : "s were"} refused. Every ciphertext decrypted back to its share.`);
       }
       movement.current.clear(); setUserBits(0); setSamples(0); setTaps(0);
+      setSecretSource(ownSecret ? "own" : "generated"); setOwnSecretText(""); setShowOwnSecret(false);
       setPads(newPads); setPdfUrl(url); setReveal(false); go(4);
     } catch (error) {
       if (version === generationVersion.current) setFailure(error instanceof Error ? error.message : "The sheet could not be generated. No PDF was issued.");
@@ -348,7 +364,7 @@ function App({ onLockChange }) {
             </div></fieldset>
             <p className="technical-note">Any {threshold} of your {count} sharekeepers can recover; up to {count - threshold} can be lost or refuse. The number needed is always at least one fewer than the total, so losing one sharekeeper never makes recovery impossible. Only SLIP-39 single-level schemes are offered (one group, 2 ≤ n ≤ m − 1); a threshold of 1 is not, as the spec forbids it with more than one share. The tool creates {count} SLIP-39 shares, any {threshold} of which recover the seed.</p>
             <div className="profile-row"><span><strong>{threshold}-of-{count}</strong> sheet layout</span><span><strong>{PAD_LENGTH} letters</strong> per pad</span><span><strong>US Letter</strong> printable PDF</span></div>
-            {<div className="plain-note"><LockKeyhole size={19} aria-hidden="true" /><div><h3>This tool creates a new wallet seed.</h3><p>It generates a 128-bit SLIP-39 master secret and its {count} shares (20 words each) in this tab’s memory, encrypts each share with that sharekeeper’s pad, and never stores or sends anything. It does not import an existing seed. Nothing is saved: closing the tab or clearing the session discards it, although the browser may keep copies in memory until they are overwritten.</p></div></div>}
+            {<div className="plain-note"><LockKeyhole size={19} aria-hidden="true" /><div><h3>This tool creates a new wallet seed.</h3><p>It generates a 128-bit SLIP-39 master secret and its {count} shares (20 words each) in this tab’s memory, encrypts each share with that sharekeeper’s pad, and never stores or sends anything. It does not accept a seed phrase. An advanced option at step 04, off by default and not available in a dry run, lets you enter your own 128-bit SLIP-39 master secret instead. Nothing is saved: closing the tab or clearing the session discards it, although the browser may keep copies in memory until they are overwritten.</p></div></div>}
             {!dryRun && !offline.ready && <div className="run-paths" data-testid="run-paths">
               <article className="run-path"><h3>For real: offline</h3><ol>
                 <li>{offline.fromFile ? "You are running the downloaded file." : PLATFORM_PREVIEW
@@ -399,8 +415,27 @@ function App({ onLockChange }) {
             <h2 id="step-heading" tabIndex="-1" ref={headingRef}>Check the details before creating keys.</h2>
             <p className="subheading">Each sharekeeper gets one SLIP-39 share, encrypted with its own {PAD_LENGTH}-letter pad. Nothing has been generated yet.</p>
             <div className="contact-review">{activeKeepers.map((k, i) => <article key={k.id} className="review-row"><span className="row-number">{String(i + 1).padStart(2, "0")}</span><div><h3>{k.name || "Contact details missing"}</h3><p>{k.phone || k.website || k.address1 || "Add a contact channel"}</p></div><button className="text-button" disabled={busy} onClick={() => { setKeeperIndex(i); go(1); }} data-testid={`edit-keeper-${i + 1}`}>Edit</button></article>)}</div>
+            <div className="own-secret" data-testid="own-secret">
+              <label className="own-secret-toggle"><input type="checkbox" checked={useOwnSecret} disabled={busy || dryRun} onChange={(e) => { setUseOwnSecret(e.target.checked); setOwnSecretText(""); setShowOwnSecret(false); }} data-testid="toggle-own-secret" /><span><strong>Use my own SLIP-39 master secret</strong> (advanced, off by default)</span></label>
+              {dryRun ? <p className="own-secret-note">Not available in a dry run, which may be online. Use the downloaded tool offline.</p>
+              : !useOwnSecret ? <p className="own-secret-note">Leave this off to generate a new seed. Turn it on only to split a 128-bit master secret you already have.</p>
+              : <>
+                <div className="field own-secret-field">
+                  <label htmlFor="own-secret-input">Master secret<span>{OWN_SECRET_HEX_DIGITS} hex digits, spaces optional</span></label>
+                  <div className="own-secret-entry">
+                    <input id="own-secret-input" type={showOwnSecret ? "text" : "password"} value={ownSecretText} disabled={busy || offlineBlocked}
+                      onChange={(e) => setOwnSecretText(e.target.value)} autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false"
+                      data-lpignore="true" data-1p-ignore="true" inputMode="text" maxLength={80}
+                      aria-invalid={ownSecretText !== "" && ownSecretCheck.status !== "ok" && ownSecretCheck.status !== "short"} aria-describedby="own-secret-status" data-testid="own-secret-input" />
+                    <button type="button" className="text-button" onClick={() => setShowOwnSecret(!showOwnSecret)} aria-pressed={showOwnSecret} data-testid="toggle-own-secret-visible">{showOwnSecret ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}{showOwnSecret ? "Hide" : "Show"}</button>
+                  </div>
+                  <p id="own-secret-status" className={ownSecretCheck.status === "ok" ? "own-secret-status ok" : ownSecretCheck.status === "empty" || ownSecretCheck.status === "short" ? "own-secret-status" : "own-secret-status field-error"} role="status" data-testid="own-secret-status">{ownSecretCheck.status === "ok" && <Check size={14} aria-hidden="true" />}{ownSecretCheck.message}</p>
+                </div>
+                <p className="own-secret-note">This is the SLIP-39 master secret, which SLIP-39 wallets use directly as the BIP-32 seed. It is not a BIP-39 seed phrase or its entropy: the same 32 digits used as BIP-39 entropy give a different wallet. With no passphrase, the shares restore exactly this value. The tool cannot judge how random it is, and any copy that already exists elsewhere stays there. Your movement input is still needed for the pads.</p>
+              </>}
+            </div>
             <div className="mix-summary"><Fingerprint size={20} aria-hidden="true" /><div><strong>Two sources, one local generation</strong><p>{BROWSER_SEED_BITS}-bit browser seed per pad ⊕ {BROWSER_SEED_BITS}-bit block from your {movement.current.count} movement/timing samples (estimated score {Math.min(userBits, 99999)}) → unbiased A–Z selection.</p></div></div>
-            {<p className="technical-note">Generation creates a 128-bit master secret (browser CSPRNG ⊕ SHA-512 of your input), splits it into {count} SLIP-39 shares with threshold {threshold} (single-level: one group; extendable, iteration exponent 1, no SLIP-39 passphrase), and checks in memory that every set of {threshold} shares recovers it. Each share’s 80-letter plaintext P is the first 4 letters of its 20 words; ciphertext C = (P + K) mod 26 with A = 0. {dryRun ? "In a dry run no PDF is created: you see the results on screen only." : "You get two PDFs: your one unified recovery sheet for all sharekeepers, as 4 labeled copies on 4 pages (COPY 1 OF 4 to COPY 4 OF 4) with contacts, pads, first 2 cipher groups and ciphertext CRC64 filled in, and a provider information pack with two pages per provider (their ciphertext and CRC64, how to handle a release request, and a record of agreed terms). Wallet line 01 gets the first address; other wallet rows stay blank."}</p>}
+            {<p className="technical-note">Generation {useOwnSecret && !dryRun ? "takes your 128-bit master secret" : "creates a 128-bit master secret (browser CSPRNG ⊕ SHA-512 of your input)"}, splits it into {count} SLIP-39 shares with threshold {threshold} (single-level: one group; extendable, iteration exponent 1, no SLIP-39 passphrase), and checks in memory that every set of {threshold} shares recovers it. Each share’s 80-letter plaintext P is the first 4 letters of its 20 words; ciphertext C = (P + K) mod 26 with A = 0. {dryRun ? "In a dry run no PDF is created: you see the results on screen only." : "You get two PDFs: your one unified recovery sheet for all sharekeepers, as 4 labeled copies on 4 pages (COPY 1 OF 4 to COPY 4 OF 4) with contacts, pads, first 2 cipher groups and ciphertext CRC64 filled in, and a provider information pack with two pages per provider (their ciphertext and CRC64, how to handle a release request, and a record of agreed terms). Wallet line 01 gets the first address; other wallet rows stay blank."}</p>}
             <div className="acknowledgments">{(dryRun ? [
               "I understand this is a practice run: nothing will be downloaded, and the results must never be used for real funds.",
               "I understand that for real use I must download the tool and run it offline.",
@@ -408,11 +443,11 @@ function App({ onLockChange }) {
               "I understand this is an unaudited prototype and will test recovery offline, with a small amount first, before relying on it.",
               "I will keep my recovery sheet and the plaintext shares private. Each sharekeeper receives only their own ciphertext page.",
             ]).map((text, i) => <label key={i}><input type="checkbox" disabled={busy} checked={acknowledgments[i]} onChange={(e) => setAcknowledgments((old) => old.map((v, j) => j === i ? e.target.checked : v))} data-testid={`ack-${i}`} /><span>{text}</span></label>)}</div>
-            <div className="actions between"><button className="secondary-button" disabled={busy} onClick={() => go(2)} data-testid="button-back"><ArrowLeft size={16} aria-hidden="true" /> Back</button><button className="primary-button" disabled={busy || !cryptoReady || !entropyReady || offlineBlocked || !acknowledgments.every(Boolean)} onClick={generate} data-testid="button-generate">{busy ? "Generating locally…" : dryRun ? "Generate dry run" : "Generate seed and shares"}<LockKeyhole size={17} aria-hidden="true" /></button></div>
+            <div className="actions between"><button className="secondary-button" disabled={busy} onClick={() => go(2)} data-testid="button-back"><ArrowLeft size={16} aria-hidden="true" /> Back</button><button className="primary-button" disabled={busy || !cryptoReady || !entropyReady || offlineBlocked || ownSecretBlocked || !acknowledgments.every(Boolean)} onClick={generate} data-testid="button-generate">{busy ? "Generating locally…" : dryRun ? "Generate dry run" : useOwnSecret ? "Generate shares of my secret" : "Generate seed and shares"}<LockKeyhole size={17} aria-hidden="true" /></button></div>
           </>}
           {stage === 4 && <>
             <p className="eyebrow">{dryRun ? "Dry run / Practice only" : "Ready / Private documents"}</p>
-            <h2 id="step-heading" tabIndex="-1" ref={headingRef}>{dryRun ? `Dry run complete: a practice seed and ${count} shares.` : `Your seed and ${count} shares are ready.`}</h2>
+            <h2 id="step-heading" tabIndex="-1" ref={headingRef}>{dryRun ? `Dry run complete: a practice seed and ${count} shares.` : secretSource === "own" ? `${count} shares of your master secret are ready.` : `Your seed and ${count} shares are ready.`}</h2>
             <p className="subheading" data-testid="check-summary">{checkSummary}</p>
             {dryRun ? <div className="plain-note dry-note" data-testid="dry-run-no-downloads"><LockKeyhole size={20} aria-hidden="true" /><div><h3>No downloads in a dry run.</h3><p>A real run produces your recovery sheet (one PDF, 4 labeled copies) and the provider information pack (one PDF, two pages per provider). To get them, {offline.fromFile ? "disconnect from the network, reopen this file," : PLATFORM_PREVIEW ? <><a href={STANDALONE_URL} target="_blank" rel="noopener noreferrer">open the standalone tool</a>, download it, disconnect,</> : <><a href="./sharekeeper-offline.html" download="sharekeeper-offline.html" data-testid="dry-download">download the tool</a>, disconnect, open the file,</>} and run it again. Your contacts are not carried over.</p></div></div> : <><div className="download-panel"><FileText size={33} aria-hidden="true" /><div><h3>Your recovery sheet</h3><p>One unified sheet for all {count} sharekeepers, 4 labeled copies (COPY 1–4 OF 4, one per page) · {threshold} of {count} · contacts, pads, first 2 cipher groups, ciphertext CRC64 · US Letter</p><span>Contains the pads. Keep it private; never give it to a sharekeeper.</span></div></div>
             <div className="actions"><a className="primary-button" href={pdfUrl} download="sharekeeper-recovery-sheet-private.pdf" data-testid="download-pdf"><Download size={18} aria-hidden="true" /> Download recovery sheet</a></div>
