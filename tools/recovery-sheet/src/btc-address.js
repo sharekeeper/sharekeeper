@@ -1,4 +1,4 @@
-import { HDKey } from "@scure/bip32";
+import { HDKey, HARDENED_OFFSET } from "@scure/bip32";
 import { bech32 } from "@scure/base";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { ripemd160 } from "@noble/hashes/legacy.js";
@@ -15,22 +15,34 @@ import { ripemd160 } from "@noble/hashes/legacy.js";
  * before returning; the caller still owns (and wipes) the master secret.
  */
 export const FIRST_ADDRESS_PATH = "m/84'/0'/0'/0/0";
+const H = HARDENED_OFFSET;
+/** The same path as explicit child indexes: 84', 0', 0', 0, 0. */
+export const FIRST_ADDRESS_INDEXES = Object.freeze([84 + H, 0 + H, 0 + H, 0, 0]);
 
-export function firstBip84Address(masterSeed) {
+/**
+ * Walk the path one child at a time (rather than HDKey.derive, which drops
+ * its intermediate nodes) so every node holding a private key, root through
+ * leaf, is wiped in the finally block, on success and on failure. Copies made
+ * inside the library or by the JavaScript engine cannot be wiped from here.
+ */
+export function firstBip84Address(masterSeed, { fromMasterSeed = (seed) => HDKey.fromMasterSeed(seed) } = {}) {
   if (!(masterSeed instanceof Uint8Array) || ![16, 32, 64].includes(masterSeed.length)) {
     throw new TypeError("The BIP-32 seed must be 16, 32 or 64 bytes.");
   }
-  const root = HDKey.fromMasterSeed(masterSeed);
-  let child;
+  const nodes = [];
   try {
-    child = root.derive(FIRST_ADDRESS_PATH);
-    const publicKey = child.publicKey;
+    let node = fromMasterSeed(masterSeed);
+    nodes.push(node);
+    for (const index of FIRST_ADDRESS_INDEXES) {
+      node = node.deriveChild(index);
+      nodes.push(node);
+    }
+    const publicKey = node.publicKey;
     if (!(publicKey instanceof Uint8Array) || publicKey.length !== 33) throw new Error("Address derivation failed.");
     const program = ripemd160(sha256(publicKey));
     return bech32.encode("bc", [0, ...bech32.toWords(program)]);
   } finally {
-    child?.wipePrivateData();
-    root.wipePrivateData();
+    for (const node of nodes) node?.wipePrivateData?.();
   }
 }
 

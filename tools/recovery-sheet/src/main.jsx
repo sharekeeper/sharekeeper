@@ -14,6 +14,7 @@ import { ciphertextCrc64, decryptCiphertext, encryptPrefixes, firstCipherGroups 
 import { createKeeperCiphertextPdf } from "./keeper-pdf.js";
 import { generateMasterSecret, thresholdSubsets } from "./master-secret.js";
 import { firstBip84Address, FIRST_ADDRESS_PATH, isP2wpkhAddress } from "./btc-address.js";
+import { checkSubsets } from "./recovery-check.js";
 import { combineMnemonics, decodeMnemonic, splitMasterSecret, wordPrefixes } from "./slip39.js";
 import logo from "../assets/logo-with-domain.webp";
 import "./style.css";
@@ -232,14 +233,11 @@ function App() {
         // First receive address (BIP-84, empty passphrase): the master secret is the BIP-32 seed.
         const address = firstBip84Address(masterSecret);
         if (!isP2wpkhAddress(address)) throw new Error("Address check failed. Nothing was issued.");
-        for (const subset of subsets) {
-          const recovered = await combineMnemonics(subset.map((i) => mnemonics[i]), "", globalThis.crypto);
-          const same = recovered.length === masterSecret.length && recovered.every((b, i) => b === masterSecret[i]);
-          const sameAddress = same && subset === subsets[0] ? firstBip84Address(recovered) === address : true;
-          recovered.fill(0);
-          if (!same) throw new Error("Recovery check failed: a set of shares did not recover the seed. Nothing was issued.");
-          if (!sameAddress) throw new Error("Address check failed: recovered shares gave a different address. Nothing was issued.");
-        }
+        await checkSubsets({
+          mnemonics, masterSecret, subsets, address,
+          combine: (set) => combineMnemonics(set, "", globalThis.crypto),
+          deriveAddress: firstBip84Address,
+        });
         let refused = false;
         try { (await combineMnemonics(mnemonics.slice(0, threshold - 1), "", globalThis.crypto)).fill(0); } catch { refused = true; }
         if (!refused) throw new Error("Recovery check failed: fewer than the threshold of shares were accepted. Nothing was issued.");

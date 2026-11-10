@@ -40,3 +40,34 @@ test("rejects bad seeds and validates address shape", () => {
     assert.equal(isP2wpkhAddress(bad), false, String(bad));
   }
 });
+
+test("every HD node with a private key is wiped, on success and when derivation fails", async () => {
+  const { HDKey } = await import("@scure/bip32");
+  const original = HDKey.prototype.deriveChild;
+  const created = [];
+  let failAtDepth = 0;
+  HDKey.prototype.deriveChild = function deriveChild(index) {
+    if (failAtDepth && this.depth + 1 === failAtDepth) throw new Error("injected failure");
+    const child = original.call(this, index);
+    created.push(child);
+    return child;
+  };
+  const roots = [];
+  const fromMasterSeed = (seed) => { const root = HDKey.fromMasterSeed(seed); roots.push(root); return root; };
+  try {
+    const seed = Uint8Array.from({ length: 16 }, (_, i) => i);
+    assert.equal(firstBip84Address(seed, { fromMasterSeed }), "bc1qpux3z758ulsxg69eptaakukraanqwtdxe5yy4c");
+    assert.equal(created.length, 5);
+    assert.deepEqual(created.map((node) => node.depth), [1, 2, 3, 4, 5]);
+    for (const node of [...roots, ...created]) assert.equal(node.privateKey, null, `depth ${node.depth} wiped`);
+
+    created.length = 0; roots.length = 0; failAtDepth = 3;
+    assert.throws(() => firstBip84Address(seed, { fromMasterSeed }), /injected failure/);
+    // Deriving the depth-3 child fails: the root and the depth-1 and depth-2 nodes must all be wiped.
+    assert.equal(created.length, 2);
+    assert.equal(roots.length, 1);
+    for (const node of [...roots, ...created]) assert.equal(node.privateKey, null, `depth ${node.depth} wiped after failure`);
+  } finally {
+    HDKey.prototype.deriveChild = original;
+  }
+});
