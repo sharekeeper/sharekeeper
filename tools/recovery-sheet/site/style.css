@@ -581,3 +581,5 @@ dd { margin: 0; }
   .crc-tool-notes { grid-column: 1; grid-row: 2; align-self: start; }
   .crc-calculator { grid-column: 2; grid-row: 1 / span 2; align-self: start; }
 }
+/* Home hero: raise the action buttons by one inch where they sit beside the intro. */
+@media (min-width: 721px) { .hero-actions { position: relative; top: -1in; } }
