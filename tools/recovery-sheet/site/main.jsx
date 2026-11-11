@@ -140,7 +140,7 @@ function Home() {
         <p>Sharekeeper.org is developing an open standard for distributed recovery custody, so a recovery plan does not depend on one place or person.</p>
         <div className="hero-actions">
           <RouteLink to="/tools" className="button" data-testid="home-access-tools">Access Tools<ArrowRight size={19} aria-hidden="true" /></RouteLink>
-          <a href="./recovery.html" className="button" data-testid="home-generator">Generator<ArrowRight size={19} aria-hidden="true" /></a>
+          <a href="./recovery.html" className="button" data-testid="home-generator">Generate Master Secret and Shares<ArrowRight size={19} aria-hidden="true" /></a>
           <a href="./recovery.html#recover" className="button" data-testid="home-validate-decrypt">Validate and Decrypt Shares<ArrowRight size={19} aria-hidden="true" /></a>
           <RouteLink to="/standard" className="button">Explore the standard<ArrowRight size={19} aria-hidden="true" /></RouteLink>
         </div>
