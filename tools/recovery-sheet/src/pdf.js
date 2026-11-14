@@ -476,7 +476,7 @@ export async function createRecoveryPdf({ keepers, pads, entropySummary, thresho
   document.setTitle(`Sharekeeper SLIP-39 recovery sheet: ${threshold} of ${keepers.length}`);
   document.setSubject(entropySummary === undefined
     ? "Private recovery sheet with 80-letter pads. Unaudited prototype."
-    : "Private recovery sheet with 80-letter pads (1600-bit browser seed per pad XOR 1600-bit user-input block). Unaudited prototype.");
+    : "Private recovery sheet with 80-letter pads (384-bit browser draw per pad XOR 384-bit user-input block; 376 bits per pad). Unaudited prototype.");
   document.setCreator("Sharekeeper browser-only recovery-sheet tool");
   document.setProducer("pdf-lib / Sharekeeper");
   document.setKeywords(["Sharekeeper", "recovery sheet", "private pads", "prototype"]);

@@ -4,11 +4,22 @@ const ALPHABET_LENGTH = 26;
 const ACCEPT_BELOW = 234; // 26 × 9: discard the biased tail of an 8-bit sample.
 const MAX_DRAWS_PER_PAD = 128;
 const MAX_CONTRIBUTION_BYTES = 262_144;
-/** Fresh browser CSPRNG seed per keeper pad: 1600 bits. */
-export const BROWSER_SEED_BITS = 1600;
+/**
+ * Randomness per pad. An 80-letter A–Z pad has 26^80 ≈ 2^376.04 values, so
+ * it carries 376 bits (80 × log2 26, rounded down). A uniform pad needs a draw
+ * of at least 377 bits; the tool draws 384 bits (48 bytes, the next whole
+ * byte) and redraws in the rare case (about 0.33 %) that the value falls in the
+ * biased tail, so every pad is exactly uniform.
+ */
+export const PAD_ENTROPY_BITS = 376;
+export const BROWSER_SEED_BITS = 384;
 const SEED_BYTES = BROWSER_SEED_BITS / 8;
 const MAX_BLOCKS_PER_PAD = 8;
-const USER_DOMAIN = "sharekeeper/recovery-sheet/user-stream/v2";
+const USER_DOMAIN = "sharekeeper/recovery-sheet/user-stream/v3";
+const PAD_SPACE = 26n ** BigInt(PAD_LENGTH);
+// Largest multiple of 26^80 not above 2^384: values at or above it are
+// rejected, so value mod 26^80 is uniform.
+const ACCEPT_LIMIT = ((1n << BigInt(BROWSER_SEED_BITS)) / PAD_SPACE) * PAD_SPACE;
 
 /**
  * Check the unformatted representation used in browser memory.
@@ -94,7 +105,7 @@ export function generatePads(count, cryptoSource = globalThis.crypto) {
 }
 
 /**
- * Expand the user's movement/timing record into one 200-byte block for a
+ * Expand the user's movement/timing record into one 48-byte block for a
  * keeper pad: SHA-512 in counter mode over the whole record, with keeper,
  * block and chunk numbers as domain separation. The record is never first
  * compressed to a short hash. Block length is not a measure of its entropy.
@@ -124,28 +135,47 @@ async function userBlock(subtle, contribution, padIndex, blockIndex) {
 }
 
 /**
- * Combine a 1600-bit browser CSPRNG seed with a 1600-bit-long block derived from
- * the user's movement/timing record, for every keeper pad.
+ * Map a 48-byte block to an 80-letter pad, or null if it falls in the
+ * rejected tail. The block is read as a big-endian 384-bit integer N; if
+ * N < ACCEPT_LIMIT, the pad is N mod 26^80 written as 80 base-26 digits
+ * (A = 0), most significant first. BigInt values cannot be wiped.
+ */
+export function padFromBlock(block) {
+  if (!(block instanceof Uint8Array) || block.length !== SEED_BYTES) throw new TypeError(`A ${SEED_BYTES}-byte block is required.`);
+  let value = 0n;
+  for (const byte of block) value = (value << 8n) | BigInt(byte);
+  if (value >= ACCEPT_LIMIT) return null;
+  value %= PAD_SPACE;
+  const letters = new Array(PAD_LENGTH);
+  for (let index = PAD_LENGTH - 1; index >= 0; index -= 1) {
+    letters[index] = String.fromCharCode(65 + Number(value % 26n));
+    value /= 26n;
+  }
+  return letters.join("");
+}
+
+/**
+ * Combine a 384-bit browser CSPRNG draw with a 384-bit block derived from the
+ * user's movement/timing record, for every keeper pad.
  *
- * For each pad, 200 fresh bytes from crypto.getRandomValues are XORed byte by
- * byte with a 200-byte user block (see userBlock), and the combined bytes are
- * rejection-sampled directly into A–Z letters (bytes 234–255 are discarded, so
- * no letter is favoured). About 183 of 200 bytes are accepted on average,
- * far more than the 80 letters needed; a further independent 200-byte block is
- * drawn only in the unlikely case that a block runs short.
+ * For each pad, 48 fresh bytes from crypto.getRandomValues are XORed byte by
+ * byte with a 48-byte user block (see userBlock), and the result is mapped to
+ * 80 letters by padFromBlock. In about 0.33 % of cases the value falls in the
+ * rejected tail and a further independent draw (with a new user block) is
+ * made, so every one of the 26^80 pads is equally likely.
  *
  * Because the CSPRNG bytes are uniform and independent of the user block, the
  * XOR is uniform whatever the user block contains. If the browser generator
  * were weak, the user block would help only to the extent the user's input is
- * genuinely unknown and unpredictable; its 200-byte length is not an entropy
- * claim. There is no intermediate short key or 256-bit hash. Browser
- * randomness is cryptographic pseudorandomness, not a physical true-random
- * guarantee, and this is not a claim of information-theoretic security.
+ * genuinely unknown and unpredictable; its length is not an entropy claim.
+ * Browser randomness is cryptographic pseudorandomness, not a physical
+ * true-random guarantee, and this is not a claim of information-theoretic
+ * security.
  *
  * Mutable private byte buffers are cleared on success or failure. The caller
- * owns and must clear its original contribution if desired. JavaScript strings
- * and engine copies cannot be reliably erased by this API. Callers must not
- * log, persist, or transmit the resulting pads.
+ * owns and must clear its original contribution if desired. JavaScript strings,
+ * BigInt values and engine copies cannot be reliably erased by this API.
+ * Callers must not log, persist, or transmit the resulting pads.
  */
 export async function generatePadsWithEntropy(
   count,
@@ -180,23 +210,21 @@ export async function generatePadsWithEntropy(
   const pads = [];
   try {
     for (let padIndex = 0; padIndex < count; padIndex += 1) {
-      let pad = "";
-      for (let blockIndex = 0; pad.length < PAD_LENGTH && blockIndex < MAX_BLOCKS_PER_PAD; blockIndex += 1) {
+      let pad = null;
+      for (let blockIndex = 0; pad === null && blockIndex < MAX_BLOCKS_PER_PAD; blockIndex += 1) {
         const seed = new Uint8Array(SEED_BYTES);
         let user;
         try {
           cryptoSource.getRandomValues(seed);
           user = await userBlock(subtle, contribution, padIndex, blockIndex);
-          for (let index = 0; index < SEED_BYTES && pad.length < PAD_LENGTH; index += 1) {
-            const byte = seed[index] ^ user[index];
-            if (byte < ACCEPT_BELOW) pad += String.fromCharCode(65 + (byte % ALPHABET_LENGTH));
-          }
+          for (let index = 0; index < SEED_BYTES; index += 1) seed[index] ^= user[index];
+          pad = padFromBlock(seed);
         } finally {
           seed.fill(0);
           user?.fill(0);
         }
       }
-      if (pad.length !== PAD_LENGTH) {
+      if (pad === null || pad.length !== PAD_LENGTH) {
         throw new Error("Entropy mixing exceeded its rejection-sampling limit.");
       }
       pads.push(pad);

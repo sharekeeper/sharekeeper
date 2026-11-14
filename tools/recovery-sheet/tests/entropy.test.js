@@ -1,9 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { axisCredit, createEntropyCollector, MAX_ENTROPY_RECORDS, USER_ENTROPY_TARGET_BITS } from "../src/entropy.js";
+import { axisCredit, createEntropyCollector, MAX_ENTROPY_RECORDS, userEntropyTargetBits } from "../src/entropy.js";
+const USER_ENTROPY_TARGET_BITS = userEntropyTargetBits(5);
 
-test("target is 1600 bits", () => {
-  assert.equal(USER_ENTROPY_TARGET_BITS, 1600);
+test("target is 376 per share plus 128 for the master secret", () => {
+  assert.equal(userEntropyTargetBits(3), 1256);
+  assert.equal(userEntropyTargetBits(4), 1632);
+  assert.equal(userEntropyTargetBits(5), 2008);
+  for (const bad of [1, 6, 3.5, "3", undefined]) assert.throws(() => userEntropyTargetBits(bad), RangeError);
 });
 
 test("axis credit uses the smallest of first, second and third differences", () => {
@@ -51,7 +55,7 @@ test("realistic curved movement reaches the target in about a thousand events", 
     events += 1;
   }
   assert.ok(collector.bits >= USER_ENTROPY_TARGET_BITS);
-  assert.ok(events < 2000, `took ${events} events`);
+  assert.ok(events < 2600, `took ${events} events`);
 });
 
 test("encode is a binary snapshot; clear resets records, counts and bits", () => {

@@ -15,7 +15,17 @@
  *
  * Records stay in memory only. encode() returns a binary copy for mixing.
  */
-export const USER_ENTROPY_TARGET_BITS = 1600;
+/**
+ * Collection target: 376 points per pad (an 80-letter pad carries
+ * 80 × log2 26 ≈ 376 bits) for each of the m shares, plus 128 for the
+ * 128-bit master secret: 376·m + 128 (1256, 1632, 2008 for m = 3, 4, 5).
+ */
+export const PAD_TARGET_BITS = 376;
+export const SEED_TARGET_BITS = 128;
+export function userEntropyTargetBits(shareCount) {
+  if (!Number.isInteger(shareCount) || shareCount < 2 || shareCount > 5) throw new RangeError("Share count must be an integer from 2 to 5.");
+  return PAD_TARGET_BITS * shareCount + SEED_TARGET_BITS;
+}
 export const MAX_ENTROPY_RECORDS = 12_000;
 const POINTER_CAP_BITS = 2;
 const TIMING_CAP_BITS = 4;

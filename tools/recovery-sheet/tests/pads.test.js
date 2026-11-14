@@ -4,6 +4,8 @@ import { createHash, webcrypto } from "node:crypto";
 import { GROUP_LENGTH, PAD_LENGTH } from "../shared/schema.js";
 import {
   BROWSER_SEED_BITS,
+  PAD_ENTROPY_BITS,
+  padFromBlock,
   generatePads,
   generatePadsWithEntropy,
   groupPad,
@@ -208,31 +210,41 @@ function contribution(value = 1) {
   return new Uint8Array([value, 2, 3, 4, 5, 6]);
 }
 
-// Independent reference: SHA-512 counter-mode user block, XOR, rejection.
+// Independent reference: SHA-512 user block (one chunk, first 48 bytes), XOR,
+// then the 384-bit value is rejected at or above the largest multiple of 26^80
+// and otherwise written as 80 base-26 digits of value mod 26^80.
+const REF_SPACE = 26n ** 80n;
+const REF_TOP = 1n << 384n;
+const REF_LIMIT = REF_TOP - (REF_TOP % REF_SPACE);
+function refUserBlock(input, keeper, block) {
+  const prefix = new TextEncoder().encode(`sharekeeper/recovery-sheet/user-stream/v3|keeper:${keeper}|block:${block}|chunk:0|`);
+  return new Uint8Array(createHash("sha512").update(prefix).update(input).digest().subarray(0, 48));
+}
+function refPad(bytes) {
+  const n = BigInt("0x" + Buffer.from(bytes).toString("hex"));
+  if (n >= REF_LIMIT) return null;
+  let v = n % REF_SPACE; let out = "";
+  for (let i = 0; i < 80; i += 1) { out = String.fromCharCode(65 + Number(v % 26n)) + out; v /= 26n; }
+  return out;
+}
 async function referencePads(count, input, seedFor) {
   const pads = [];
   for (let keeper = 0; keeper < count; keeper += 1) {
-    let pad = "";
-    for (let block = 0; pad.length < PAD_LENGTH; block += 1) {
-      const user = new Uint8Array(200);
-      for (let chunk = 0; chunk * 64 < 200; chunk += 1) {
-        const prefix = new TextEncoder().encode(`sharekeeper/recovery-sheet/user-stream/v2|keeper:${keeper}|block:${block}|chunk:${chunk}|`);
-        const digest = createHash("sha512").update(prefix).update(input).digest();
-        user.set(digest.subarray(0, Math.min(64, 200 - chunk * 64)), chunk * 64);
-      }
+    let pad = null;
+    for (let block = 0; pad === null; block += 1) {
+      const user = refUserBlock(input, keeper, block);
       const seed = seedFor(keeper, block);
-      for (let index = 0; index < 200 && pad.length < PAD_LENGTH; index += 1) {
-        const byte = seed[index] ^ user[index];
-        if (byte < 234) pad += String.fromCharCode(65 + (byte % 26));
-      }
+      pad = refPad(seed.map((b, i) => b ^ user[i]));
     }
     pads.push(pad);
   }
   return pads;
 }
 
-test("mixed API draws one fresh 1600-bit (200-byte) browser seed per keeper", async () => {
-  assert.equal(BROWSER_SEED_BITS, 1600);
+test("mixed API draws fresh 384-bit (48-byte) browser blocks, normally one per keeper", async () => {
+  assert.equal(BROWSER_SEED_BITS, 384);
+  assert.equal(PAD_ENTROPY_BITS, 376);
+  assert.equal(Math.floor(80 * Math.log2(26)), 376);
   for (const count of [2, 3, 4, 5]) {
     const sizes = [];
     const source = {
@@ -245,7 +257,8 @@ test("mixed API draws one fresh 1600-bit (200-byte) browser seed per keeper", as
     const pads = await generatePadsWithEntropy(count, contribution(), source);
     assert.equal(pads.length, count);
     assert.ok(pads.every(isValidPad));
-    assert.deepEqual(sizes, Array(count).fill(200));
+    assert.ok(sizes.every((size) => size === 48));
+    assert.ok(sizes.length >= count && sizes.length <= count * 8);
   }
 });
 
@@ -270,7 +283,7 @@ test("mixed API output is uniform-letter even when the user block is constant", 
   // with a fixed user record, distinct browser seeds still give distinct pads.
   const fixed = contribution(7);
   const zero = await generatePadsWithEntropy(3, fixed, mixedSource(0));
-  assert.deepEqual(zero, await referencePads(3, fixed, () => new Uint8Array(200)));
+  assert.deepEqual(zero, await referencePads(3, fixed, () => new Uint8Array(48)));
   const a = await generatePadsWithEntropy(3, fixed);
   const b = await generatePadsWithEntropy(3, fixed);
   assert.notDeepEqual(a, b);
@@ -338,7 +351,8 @@ test("mixed API snapshots caller input and clears private byte buffers", async (
   const expected = await generatePadsWithEntropy(3, snapshot, mixedSource(18));
   assert.deepEqual(pads, expected);
   assert.ok(original.every((byte) => byte === 99)); // Caller-owned, not erased.
-  assert.equal(captures.inputs.length, 3 * 4);
+  assert.equal(captures.inputs.length, captures.seeds.length); // one SHA-512 per 48-byte block
+  assert.ok(captures.seeds.length >= 3);
   for (const bytes of [...captures.seeds, ...captures.inputs]) {
     assert.ok(bytes.every((byte) => byte === 0));
   }
@@ -367,17 +381,10 @@ test("mixed API clears seed and inputs on digest failure", async () => {
 });
 
 test("mixed API rejects high bytes and bounds a pathological source", async () => {
-  // Choose browser bytes so every combined byte is >= 234 (always rejected).
+  // Choose browser bytes so every combined value is 2^384 - 1 (always rejected).
   const input = contribution();
   const reference = [];
-  for (let block = 0; block < 8; block += 1) {
-    const user = new Uint8Array(200);
-    for (let chunk = 0; chunk * 64 < 200; chunk += 1) {
-      const prefix = new TextEncoder().encode(`sharekeeper/recovery-sheet/user-stream/v2|keeper:0|block:${block}|chunk:${chunk}|`);
-      user.set(createHash("sha512").update(prefix).update(input).digest().subarray(0, Math.min(64, 200 - chunk * 64)), chunk * 64);
-    }
-    reference.push(user);
-  }
+  for (let block = 0; block < 8; block += 1) reference.push(refUserBlock(input, 0, block));
   let calls = 0;
   const source = {
     subtle: webcrypto.subtle,
@@ -390,4 +397,30 @@ test("mixed API rejects high bytes and bounds a pathological source", async () =
   };
   await assert.rejects(generatePadsWithEntropy(3, input, source), /Entropy mixing exceeded its rejection-sampling limit/);
   assert.equal(calls, 8);
+});
+
+test("padFromBlock: exact boundaries and the rejected tail", () => {
+  const toBlock = (n) => Uint8Array.from(Buffer.from(n.toString(16).padStart(96, "0"), "hex"));
+  assert.equal(padFromBlock(toBlock(0n)), "A".repeat(80));
+  assert.equal(padFromBlock(toBlock(REF_SPACE - 1n)), "Z".repeat(80));
+  assert.equal(padFromBlock(toBlock(REF_SPACE)), "A".repeat(80));
+  assert.equal(padFromBlock(toBlock(25n)), "A".repeat(79) + "Z");
+  assert.equal(padFromBlock(toBlock(26n)), "A".repeat(78) + "BA");
+  assert.equal(padFromBlock(toBlock(REF_LIMIT - 1n)), refPad(toBlock(REF_LIMIT - 1n)));
+  assert.equal(padFromBlock(toBlock(REF_LIMIT)), null);
+  assert.equal(padFromBlock(toBlock(REF_TOP - 1n)), null);
+  // Rejected share of all 384-bit values: about 0.33 %.
+  const rejected = Number(REF_TOP - REF_LIMIT) / 2 ** 384;
+  assert.ok(rejected > 0.003 && rejected < 0.004, String(rejected));
+  assert.throws(() => padFromBlock(new Uint8Array(47)), TypeError);
+});
+
+test("random blocks give letters with near-uniform frequencies", async () => {
+  const counts = new Array(26).fill(0);
+  const pads = [];
+  for (let i = 0; i < 300; i += 1) pads.push(...await generatePadsWithEntropy(5, contribution(i & 255)));
+  for (const pad of pads) for (const ch of pad) counts[ch.charCodeAt(0) - 65] += 1;
+  const total = pads.length * 80; const expected = total / 26;
+  const chi2 = counts.reduce((sum, c) => sum + (c - expected) ** 2 / expected, 0);
+  assert.ok(chi2 < 70, `chi-square ${chi2.toFixed(1)} with 25 degrees of freedom`);
 });
